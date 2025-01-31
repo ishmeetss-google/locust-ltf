@@ -59,6 +59,12 @@ variable "index_distance_measure_type" {
   }
 }
 
+variable "feature_norm_type" {
+  type        = string
+  description = "Type of normalization to be carried out on each vector. Can be UNIT_L2_NORM or NONE"
+  default     = "NONE"
+}
+
 variable "index_algorithm_config_type" {
   type        = string
   description = "Algorithm config type for the index (tree_ah_config, brute_force_config)"

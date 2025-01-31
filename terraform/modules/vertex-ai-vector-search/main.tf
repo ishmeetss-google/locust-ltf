@@ -1,5 +1,14 @@
 # modules/vertex-ai-vector-search/main.tf
 
+ terraform {
+    required_providers {
+      google = {
+        source  = "hashicorp/google"
+        version = "~> 5.0"  # Update to a version that supports the resource
+      }
+    }
+  }
+
 # -----------------------------------------------------------------------------
 # Vertex AI Index Resource
 # -----------------------------------------------------------------------------
@@ -11,11 +20,12 @@ resource "google_vertex_ai_index" "vector_index" {
   labels       = var.index_labels
 
   metadata {
-    contents_delta_uri = "gs://${var.existing_bucket_name}/${var.index_data_path}"
+    contents_delta_uri = "gs://${var.existing_bucket_name}/${var.embedding_data_path}"
     config {
       dimensions                  = var.index_dimensions
       approximate_neighbors_count = var.index_approximate_neighbors_count
       distance_measure_type       = var.index_distance_measure_type
+      feature_norm_type = var.feature_norm_type
 
       dynamic "algorithm_config" {
         for_each = var.index_algorithm_config_type == "tree_ah_config" ? [1] : []
@@ -55,12 +65,7 @@ resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
   labels                = var.endpoint_labels
   public_endpoint_enabled = var.endpoint_public_endpoint_enabled
 
-  dynamic "network" {
-    for_each = var.endpoint_network != null ? [var.endpoint_network] : []
-    content {
-      name = var.endpoint_network
-    }
-  }
+  network = var.endpoint_network
 
   dynamic "private_service_connect_config" {
     for_each = var.endpoint_enable_private_service_connect ? [1] : []
@@ -106,13 +111,8 @@ resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index
     }
   }
 
-  # Dynamic block for optional reserved IP ranges
-  dynamic "reserved_ip_ranges" {
-    for_each = var.deployed_index_reserved_ip_ranges != null ? [var.deployed_index_reserved_ip_ranges] : []
-    content {
-      reserved_ip_ranges = var.deployed_index_reserved_ip_ranges
-    }
-  }
+  # Set reserved_ip_ranges directly, conditionally using a ternary operator:
+ reserved_ip_ranges = var.deployed_index_reserved_ip_ranges == null ? null : var.deployed_index_reserved_ip_ranges
 
   timeouts {
     create = var.deployed_index_create_timeout

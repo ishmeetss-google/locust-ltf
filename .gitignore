@@ -1,0 +1,33 @@
+# .gitignore for Terraform
+
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files - State files should not be committed, especially not production state!
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Ignore any .tfvars files containing secrets that should not end up in version control
+*.tfvars
+*sensitive*.tf
+
+# Ignore override files as they are usually used to override resources locally and so
+# are not checked in
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# .terraformrc file containing sensitive credentials like access tokens
+.terraformrc
+terraform.rc
+
+# Plan files should not be committed as they can show diffs of sensitive information
+*.tfplan
+
+# Ignore any credentials file
+*.json
