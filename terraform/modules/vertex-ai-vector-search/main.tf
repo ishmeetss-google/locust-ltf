@@ -1,14 +1,5 @@
 # modules/vertex-ai-vector-search/main.tf
 
- terraform {
-    required_providers {
-      google = {
-        source  = "hashicorp/google"
-        version = "~> 5.0"  # Update to a version that supports the resource
-      }
-    }
-  }
-
 # -----------------------------------------------------------------------------
 # Vertex AI Index Resource
 # -----------------------------------------------------------------------------
@@ -85,6 +76,7 @@ resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
 # Vertex AI Deployed Index Resource (Deploy Index to Endpoint)
 # -----------------------------------------------------------------------------
 resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index" {
+  depends_on = [google_vertex_ai_index_endpoint.vector_index_endpoint]
   provider          = google
   index_endpoint    = google_vertex_ai_index_endpoint.vector_index_endpoint.id
   index             = google_vertex_ai_index.vector_index.id

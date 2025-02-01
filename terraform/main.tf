@@ -2,10 +2,15 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 5.0" # Update to a version that supports the resource
+      version = "6.18.1"
     }
   }
 }
+
+provider "google" {
+  region = var.region # Set the region at the provider level within the module
+}
+
 module "vector_search" {
   source = "./modules/vertex-ai-vector-search"
 

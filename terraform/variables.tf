@@ -75,7 +75,7 @@ variable "index_distance_measure_type" {
 variable "feature_norm_type" {
   type        = string
   description = "Type of normalization to be carried out on each vector. Can be UNIT_L2_NORM or NONE"
-  default     = "NONE"
+  default     = "UNIT_L2_NORM"
 }
 
 variable "index_algorithm_config_type" {
@@ -192,7 +192,7 @@ variable "endpoint_delete_timeout" {
 variable "deployed_index_id" {
   type        = string
   description = "User-defined ID for the Deployed Index."
-  default     = "load-testing-deployed-index"
+  default     = "load_testing_deployed_index"
 }
 
 variable "deployed_index_resource_type" {

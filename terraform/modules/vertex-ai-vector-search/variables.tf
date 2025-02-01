@@ -52,7 +52,7 @@ variable "index_approximate_neighbors_count" {
 variable "index_distance_measure_type" {
   type        = string
   description = "Distance measure type (DOT_PRODUCT_DISTANCE, COSINE_DISTANCE, L2_SQUARED_DISTANCE)"
-  default     = "DOT_PRODUCT_DISTANCE"
+  default     = "COSINE_DISTANCE"
   validation {
     condition     = contains(["DOT_PRODUCT_DISTANCE", "COSINE_DISTANCE", "L2_SQUARED_DISTANCE"], var.index_distance_measure_type)
     error_message = "Invalid value for index_distance_measure_type. Must be one of: DOT_PRODUCT_DISTANCE, COSINE_DISTANCE, L2_SQUARED_DISTANCE."
@@ -62,7 +62,7 @@ variable "index_distance_measure_type" {
 variable "feature_norm_type" {
   type        = string
   description = "Type of normalization to be carried out on each vector. Can be UNIT_L2_NORM or NONE"
-  default     = "NONE"
+  default     = "UNIT_L2_NORM"
 }
 
 variable "index_algorithm_config_type" {
@@ -179,7 +179,7 @@ variable "endpoint_delete_timeout" {
 variable "deployed_index_id" {
   type = string
   description = "User-defined ID for the Deployed Index."
-  default = "load-testing-deployed-index"
+  default     = "load_testing_deployed_index"
 }
 
 variable "deployed_index_resource_type" {
