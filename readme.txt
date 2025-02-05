@@ -1,59 +1,92 @@
-$ gcloud artifacts repositories create ishmeetss-locust-docker-repo --repository-format=docker --location=us-central1 --description="Docker repository for the locust load testing"
+# Setting Up Distributed Load Testing with Locust on Google Cloud Platform
 
-$ gcloud builds submit --tag us-central1-docker.pkg.dev/email2podcast/ishmeetss-locust-docker-repo/locust-image:LTF
+This guide demonstrates how to set up a distributed load testing environment using Locust on Google Kubernetes Engine (GKE). We'll create a Docker repository, build and deploy a Locust container, set up a GKE cluster, and configure networking for accessing the Locust web interface. This setup enables scalable performance testing of your applications.
 
-$ gcloud projects describe email2podcast
+## Step 1: Create Docker Repository
+Create an Artifact Registry repository to store our Locust Docker images.
+```bash
+gcloud artifacts repositories create ishmeetss-locust-docker-repo --repository-format=docker --location=us-central1 --description="Docker repository for the locust load testing"
+```
 
-output:
-createTime: '2023-08-28T17:25:48.645325Z'
-lifecycleState: ACTIVE
-name: email2podcast
-parent:
-  id: '246203784383'
-  type: organization
-projectId: email2podcast
-projectNumber: '131502646301'
+## Step 2: Build and Submit Docker Image
+Build and push the Locust Docker image to our repository.
+```bash
+gcloud builds submit --tag us-central1-docker.pkg.dev/email2podcast/ishmeetss-locust-docker-repo/locust-image:LTF
+```
 
-$ gcloud iam roles list | grep artifactregistry
+## Step 3: Verify Project Configuration
+Check project details to ensure proper setup and access.
+```bash
+gcloud projects describe email2podcast
+```
 
-output:
-name: roles/artifactregistry.admin
-name: roles/artifactregistry.containerRegistryMigrationAdmin
-name: roles/artifactregistry.createOnPushRepoAdmin
-name: roles/artifactregistry.createOnPushWriter
-name: roles/artifactregistry.reader
-name: roles/artifactregistry.repoAdmin
-name: roles/artifactregistry.serviceAgent
-name: roles/artifactregistry.writer
+## Step 4: Check Available IAM Roles
+Verify available Artifact Registry roles for proper permissions management.
+```bash
+gcloud iam roles list | grep artifactregistry
+```
 
-$ gcloud services enable container.googleapis.com
+## Step 5: Enable Container Services
+Enable the Container API for GKE cluster creation.
+```bash
+gcloud services enable container.googleapis.com
+```
 
-$ gcloud container clusters create ishmeetss-locust \
+## Step 6: Create GKE Cluster
+Set up a distributed GKE cluster for running Locust tests.
+```bash
+gcloud container clusters create ishmeetss-locust \
   --project email2podcast \
   --service-account ishmeetss-locust-fin@email2podcast.iam.gserviceaccount.com \
   --region us-central1 \
   --node-locations us-central1-a,us-central1-b,us-central1-c \
   --machine-type e2-standard-4 \
   --num-nodes 3
+```
 
+## Step 7: Configure IAM Policies
+Export service account IAM policies for review and management.
+```bash
 gcloud iam service-accounts get-iam-policy ishmeetss-locust-fin@email2podcast.iam.gserviceaccount.com --format json > ~/policy.json
+```
 
-gcloud container clusters delete ishmeetss-locust --region us-central1
+## Step 8: Install Required Tools
+Install necessary tools for cluster management.
+```bash
+gcloud components install gke-gcloud-auth-plugin
+sudo apt-get install google-cloud-cli-gke-gcloud-auth-plugin
+sudo apt-get install kubectl
+```
 
-$ gcloud components install gke-gcloud-auth-plugin / sudo apt-get install google-cloud-cli-gke-gcloud-auth-plugin
+## Step 9: Configure Cluster Access
+Set up authentication for the GKE cluster.
+```bash
+gcloud container clusters get-credentials ishmeetss-locust --location us-central1
+```
 
-$ sudo apt-get install kubectl
+## Step 10: Scale Cluster
+Increase the number of nodes for higher load testing capacity.
+```bash
+gcloud container clusters resize ishmeetss-locust --location us-central1 --num-nodes=10
+```
 
-$ gcloud container clusters get-credentials ishmeetss-locust --location us-central1
+## Step 11: Deploy Locust
+Apply the Locust configuration to the cluster.
+```bash
+/google/src/cloud/ishmeetss/ishmeetss/google3/experimental/users/ishmeetss/locust/kustomize build manifests/ |kubectl apply -f -
+```
 
-$ gcloud container clusters resize ishmeetss-locust --location us-central1 --num-nodes=10
-
-$ /google/src/cloud/ishmeetss/ishmeetss/google3/experimental/users/ishmeetss/locust/kustomize build manifests/ |kubectl apply -f -
-
-$ export INTERNAL_LB_IP=$(kubectl get svc locust-master-web \
+## Step 12: Set Up Load Balancer
+Configure load balancer access for the Locust web interface.
+```bash
+export INTERNAL_LB_IP=$(kubectl get svc locust-master-web \
   -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
+```
 
-$ gcloud compute instances create-with-container locust-nginx-proxy-ishmeetss-fin \
+## Step 13: Create Nginx Proxy
+Set up an Nginx proxy for accessing the Locust interface.
+```bash
+gcloud compute instances create-with-container locust-nginx-proxy-ishmeetss-fin \
   --project email2podcast \
   --zone us-central1-a \
   --container-image gcr.io/cloud-marketplace/google/nginx1:latest \
@@ -67,9 +100,10 @@ $ gcloud compute instances create-with-container locust-nginx-proxy-ishmeetss-fi
         }
     }
 EOF"
+```
 
-$ gcloud compute ssh --zone "us-central1-a" "locust-nginx-proxy-ishmeetss" --project "email2podcast"
-
-$ exit
-
-$ gcloud compute ssh locust-nginx-proxy-ishmeetss-fin --project email2podcast --zone us-central1-a -- -NL 8089:localhost:8089
+## Step 14: Configure Port Forwarding
+Set up local port forwarding to access the Locust web interface.
+```bash
+gcloud compute ssh locust-nginx-proxy-ishmeetss-fin --project email2podcast --zone us-central1-a -- -NL 8089:localhost:8089
+```

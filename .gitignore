@@ -31,3 +31,7 @@ terraform.rc
 
 # Ignore any credentials file
 *.json
+
+# Ignore vscode dependencies
+.history/*
+.vscode/*
