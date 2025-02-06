@@ -5,7 +5,6 @@
 # -----------------------------------------------------------------------------
 resource "google_vertex_ai_index" "vector_index" {
   count        = var.existing_index_id == null ? 1 : 0
-  provider     = google
   region       = var.region
   display_name = var.index_display_name
   description  = var.index_description
@@ -59,7 +58,6 @@ locals {
 # Vertex AI Index Endpoint Resource
 # -----------------------------------------------------------------------------
 resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
-  provider                = google
   region                  = var.region
   display_name            = var.endpoint_display_name
   description             = var.endpoint_description
@@ -87,7 +85,6 @@ resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
 # -----------------------------------------------------------------------------
 resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index" {
   depends_on        = [google_vertex_ai_index_endpoint.vector_index_endpoint]
-  provider          = google
   index_endpoint    = google_vertex_ai_index_endpoint.vector_index_endpoint.id
   index             = local.index_id
   deployed_index_id = var.deployed_index_id

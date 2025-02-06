@@ -19,5 +19,10 @@ output "deployed_index_id" {
 
 output "index_id" {
   description = "The ID of the Vector Index"
-  value       = google_vertex_ai_index.vector_index.id
+  value       = local.index_id
+}
+
+output "endpoint_public_url" {
+  description = "The public URL of the endpoint (if enabled)"
+  value       = var.endpoint_public_endpoint_enabled ? google_vertex_ai_index_endpoint.vector_index_endpoint.public_endpoint_domain_name : null
 }
