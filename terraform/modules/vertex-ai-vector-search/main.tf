@@ -4,7 +4,7 @@
 # Vertex AI Index Resource
 # -----------------------------------------------------------------------------
 resource "google_vertex_ai_index" "vector_index" {
-  count        = var.existing_index_id == null ? 1 : 0
+  count        = var.vector_search_index_id == null ? 1 : 0
   region       = var.region
   display_name = var.index_display_name
   description  = var.index_description
@@ -49,7 +49,7 @@ resource "google_vertex_ai_index" "vector_index" {
 # Local for index ID handling
 # -----------------------------------------------------------------------------
 locals {
-  index_id = var.existing_index_id != null ? var.existing_index_id : (
+  index_id = var.vector_search_index_id != null ? var.vector_search_index_id : (
     length(google_vertex_ai_index.vector_index) > 0 ? google_vertex_ai_index.vector_index[0].id : null
   )
 }
