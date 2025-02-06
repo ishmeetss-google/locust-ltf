@@ -18,6 +18,7 @@ module "vector_search" {
   project_id                                      = var.project_id
   region                                          = var.region
   existing_bucket_name                            = var.existing_bucket_name
+  existing_index_id                               = var.existing_index_id
   embedding_data_path                             = var.embedding_data_path
   index_display_name                              = var.index_display_name
   index_description                               = var.index_description

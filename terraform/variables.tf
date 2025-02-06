@@ -43,6 +43,12 @@ variable "index_description" {
   default     = "A Vector Index for load testing" # Default description
 }
 
+variable "vector_search_index_id" {
+  type        = string
+  description = "ID of an existing Vertex AI Index. If provided, a new index will not be created."
+  default     = null
+}
+
 variable "index_labels" {
   type        = map(string)
   description = "Labels for the Vector Index"

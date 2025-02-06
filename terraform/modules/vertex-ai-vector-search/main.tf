@@ -4,6 +4,7 @@
 # Vertex AI Index Resource
 # -----------------------------------------------------------------------------
 resource "google_vertex_ai_index" "vector_index" {
+  count        = var.existing_index_id == null ? 1 : 0
   provider     = google
   region       = var.region
   display_name = var.index_display_name
@@ -16,7 +17,7 @@ resource "google_vertex_ai_index" "vector_index" {
       dimensions                  = var.index_dimensions
       approximate_neighbors_count = var.index_approximate_neighbors_count
       distance_measure_type       = var.index_distance_measure_type
-      feature_norm_type = var.feature_norm_type
+      feature_norm_type           = var.feature_norm_type
 
       dynamic "algorithm_config" {
         for_each = var.index_algorithm_config_type == "tree_ah_config" ? [1] : []
@@ -46,14 +47,23 @@ resource "google_vertex_ai_index" "vector_index" {
 }
 
 # -----------------------------------------------------------------------------
+# Local for index ID handling
+# -----------------------------------------------------------------------------
+locals {
+  index_id = var.existing_index_id != null ? var.existing_index_id : (
+    length(google_vertex_ai_index.vector_index) > 0 ? google_vertex_ai_index.vector_index[0].id : null
+  )
+}
+
+# -----------------------------------------------------------------------------
 # Vertex AI Index Endpoint Resource
 # -----------------------------------------------------------------------------
 resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
-  provider              = google
+  provider                = google
   region                  = var.region
-  display_name          = var.endpoint_display_name
-  description           = var.endpoint_description
-  labels                = var.endpoint_labels
+  display_name            = var.endpoint_display_name
+  description             = var.endpoint_description
+  labels                  = var.endpoint_labels
   public_endpoint_enabled = var.endpoint_public_endpoint_enabled
 
   network = var.endpoint_network
@@ -76,10 +86,10 @@ resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
 # Vertex AI Deployed Index Resource (Deploy Index to Endpoint)
 # -----------------------------------------------------------------------------
 resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index" {
-  depends_on = [google_vertex_ai_index_endpoint.vector_index_endpoint]
+  depends_on        = [google_vertex_ai_index_endpoint.vector_index_endpoint]
   provider          = google
   index_endpoint    = google_vertex_ai_index_endpoint.vector_index_endpoint.id
-  index             = google_vertex_ai_index.vector_index.id
+  index             = local.index_id
   deployed_index_id = var.deployed_index_id
 
   # Corrected dynamic block for dedicated resources:
@@ -88,7 +98,7 @@ resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index
     content {
       min_replica_count = var.deployed_index_dedicated_min_replicas
       max_replica_count = var.deployed_index_dedicated_max_replicas
-      machine_spec {  # machine_spec block
+      machine_spec { # machine_spec block
         machine_type = var.deployed_index_dedicated_machine_type
       }
     }
@@ -104,7 +114,7 @@ resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index
   }
 
   # Set reserved_ip_ranges directly, conditionally using a ternary operator:
- reserved_ip_ranges = var.deployed_index_reserved_ip_ranges == null ? null : var.deployed_index_reserved_ip_ranges
+  reserved_ip_ranges = var.deployed_index_reserved_ip_ranges == null ? null : var.deployed_index_reserved_ip_ranges
 
   timeouts {
     create = var.deployed_index_create_timeout
