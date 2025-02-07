@@ -30,6 +30,12 @@ variable "index_description" {
   default     = "A Vector Index for load testing" # Default description
 }
 
+variable "existing_index_id" {
+  description = "The ID of an existing index. If null, a new index will be created."
+  type        = string
+  default     = null
+}
+
 variable "vector_search_index_id" {
   type        = string
   description = "ID of an existing Vertex AI Index. If provided, a new index will not be created."

@@ -4,6 +4,7 @@
 # Vertex AI Index Resource
 # -----------------------------------------------------------------------------
 resource "google_vertex_ai_index" "vector_index" {
+  project      = var.project_id
   count        = var.existing_index_id == null ? 1 : 0
   region       = var.region
   display_name = var.index_display_name
@@ -58,6 +59,7 @@ locals {
 # Vertex AI Index Endpoint Resource
 # -----------------------------------------------------------------------------
 resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
+  project                 = var.project_id
   region                  = var.region
   display_name            = var.endpoint_display_name
   description             = var.endpoint_description
@@ -95,7 +97,7 @@ resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index
     content {
       min_replica_count = var.deployed_index_dedicated_min_replicas
       max_replica_count = var.deployed_index_dedicated_max_replicas
-      machine_spec { # machine_spec block
+      machine_spec {
         machine_type = var.deployed_index_dedicated_machine_type
       }
     }
