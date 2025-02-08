@@ -1,7 +1,7 @@
 variable "project_id" {
     type = string
     description = "The ID of the Google Cloud project where resources will be created."
-    default = "email2podcast"
+    # No default - user MUST provide their existing bucket name
 }
 
 variable "region" {
