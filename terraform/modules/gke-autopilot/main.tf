@@ -17,7 +17,7 @@ resource "google_project_iam_custom_role" "ltf-custom-role" {
   project     = var.project_id
   role_id     = "ltf_custom_role"
   title       = "LTF Custom Role"
-  description = ""
+  description = "Custom role to query Vector Search index Endpoint."
   permissions = ["aiplatform.indexEndpoints.queryVectors"]
 }
 
