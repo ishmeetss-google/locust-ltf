@@ -2,6 +2,7 @@
 
 # Local .terraform directories
 **/.terraform/*
+**/.terraform.*
 
 # .tfstate files - State files should not be committed, especially not production state!
 *.tfstate
@@ -35,3 +36,5 @@ terraform.rc
 # Ignore vscode dependencies
 .history/*
 .vscode/*
+
+.env
