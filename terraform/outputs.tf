@@ -17,10 +17,10 @@ output "deployed_index_id" {
   value       = google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.deployed_index_id
 }
 
-output "index_id" {
-  description = "The ID of the Vector Index"
-  value       = local.index_id
-}
+# output "index_id" {
+#   description = "The ID of the Vector Index"
+#   value       = local.index_id
+# }
 
 output "endpoint_public_url" {
   description = "The public URL of the endpoint (if enabled)"

@@ -56,3 +56,20 @@ module "vector_search" {
   deployed_index_update_timeout                   = var.deployed_index_update_timeout
   deployed_index_delete_timeout                   = var.deployed_index_delete_timeout
 }
+
+module "gke_autopilot" {
+  source = "./modules/gke-autopilot"
+
+  project_id = var.project_id
+  region     = var.region
+  kubernetes_cluster_name = "terraform-ltf-cluster"
+  kubernetes_cluster_location = var.region
+}
+
+module "locust" {
+  source = "./modules/locust"
+
+  project_id = var.project_id
+  region     = var.region
+  worker_replicas = 5
+}

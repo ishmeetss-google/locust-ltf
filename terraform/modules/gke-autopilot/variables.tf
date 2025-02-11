@@ -9,3 +9,13 @@ variable "region" {
     description = "The Google Cloud region where resources will be created."
     default = "us-central1"
 }
+
+variable "kubernetes_cluster_name" {
+  type        = string
+  description = "The name of the Kubernetes cluster."
+}
+
+variable "kubernetes_cluster_location" {
+  type        = string
+  description = "The location of the Kubernetes cluster."
+}
