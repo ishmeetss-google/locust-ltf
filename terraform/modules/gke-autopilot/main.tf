@@ -22,10 +22,18 @@ resource "google_project_iam_custom_role" "ltf-custom-role" {
 }
 
 
-resource "google_project_iam_binding" "project" {
+resource "google_project_iam_binding" "binding_1" {
   project = var.project_id
   role    = google_project_iam_custom_role.ltf-custom-role.id
 
+  members = [
+    "serviceAccount:${google_service_account.service_account.email}",
+  ]
+}
+
+resource "google_project_iam_binding" "binding_2" {
+  project = var.project_id
+  role    = "roles/reader"
   members = [
     "serviceAccount:${google_service_account.service_account.email}",
   ]
