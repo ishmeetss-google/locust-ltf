@@ -37,4 +37,5 @@ The following variables are defined in `variables.tf` and **must be set in your 
 3.  **Create or modify `terraform.tfvars` in the root directory.**  This file is where you set the values for all the variables listed above.
 4.  **Initialize Terraform:** Run `terraform init` from the root directory.
 5.  **Apply the Configuration:** Run `terraform apply` from the root directory. Review the plan and type `yes` to confirm.
-6.  **Destroy Infrastructure (When done):** Run `terraform destroy` from the root directory when you want to remove the deployed resources.
+6.  **To use `kubectl`:** Run `gcloud container clusters get-credentials terraform-ltf-cluster --location us-central1` command.
+7.  **Destroy Infrastructure (When done):** Run `terraform destroy` from the root directory when you want to remove the deployed resources.
