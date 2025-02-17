@@ -60,10 +60,10 @@ module "vector_search" {
 module "gke_autopilot" {
   source = "./modules/gke-autopilot"
 
-  project_id = var.project_id
-  region     = var.region
+  project_id     = var.project_id
+  region         = var.region
   project_number = 131502646301
-  image = "us-central1-docker.pkg.dev/email2podcast/ishmeetss-locust-docker-repo/locust-image:LTF"
+  image          = "us-central1-docker.pkg.dev/email2podcast/ishmeetss-locust-docker-repo/locust-image:LTF"
 }
 
 module "locust" {
