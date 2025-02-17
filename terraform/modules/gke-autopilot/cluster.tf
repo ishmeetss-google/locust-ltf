@@ -10,7 +10,7 @@ terraform {
 resource "google_service_account" "service_account" {
   account_id   = "ltf-service-account"
   display_name = "ltf-service-account"
-  project = var.project_id
+  project      = var.project_id
 }
 
 resource "google_project_iam_binding" "artifactregistry_reader_binding" {
@@ -30,10 +30,10 @@ resource "google_project_iam_binding" "container_default_node_service_account_bi
 }
 
 resource "google_container_cluster" "ltf_autopilot_cluster" {
-  name     = "ltf-autopilot-cluster"
-  project  = var.project_id
-  location = var.region
-  enable_autopilot = true
+  name                = "ltf-autopilot-cluster"
+  project             = var.project_id
+  location            = var.region
+  enable_autopilot    = true
   deletion_protection = false
   cluster_autoscaling {
     auto_provisioning_defaults {
