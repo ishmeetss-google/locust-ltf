@@ -2,6 +2,7 @@
 
 # --- Global Variables (from root variables.tf) ---
 project_id = "whisper-test-378918" # Replace with your actual project ID
+project_number = 131502646301      # Replace with your actual Google cloud project number.
 region     = "us-central1"         # Replace with your desired region
 
 # --- Vertex AI Vector Search Module Variables (from modules/vertex-ai-vector-search/variables.tf) ---
@@ -19,3 +20,6 @@ endpoint_public_endpoint_enabled = true # Enable public endpoint
 
 # -- Deployed Index Settings --
 deployed_index_resource_type = "automatic" # Or "dedicated"
+
+# -- GKE Autopilot Settings --
+image = "us-central1-docker.pkg.dev/email2podcast/ishmeetss-locust-docker-repo/locust-image:LTF"
