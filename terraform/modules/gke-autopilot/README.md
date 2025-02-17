@@ -24,10 +24,12 @@ Before you begin, ensure you have the following:
 
 The following variables are defined in `variables.tf` and **must be set in your root `terraform.tfvars` file** when using this module.
 
-| Variable Name                                   | Description                                                                                                                                | Type    | Default                      | Example                                                                     |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------- | ---------------------------- | --------------------------------------------------------------------------- |
-| `project_id`                                    | GCP Project ID where resources will be deployed.                                                                                             | string  | **Required**                 | `your-gcp-project-id`                                                     |
+| Variable Name                                   | Description                                                                                                                              | Type    | Default                      | Example                                                                     |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------- | --------------------------------------------------------------------------- |
+| `project_id`                                    | GCP Project ID where resources will be deployed.                                                                                         | string  | **Required**                 | `your-gcp-project-id`                                                       |
 | `region`                                        | GCP region for deploying Vertex AI resources (Index, Endpoint).                                                                          | string  | `"us-central1"`              | `"europe-west1"`                                                            |
+| `project_number`                                | Numerical Google Cloud project number. Can be found by running `gcloud projects describe <project_id>` command.                          | number  | **Required**                 | `some-number`                                                               |
+| `image`                                         | Load testing image name.                                                                         | string  | **Required**             | `"us-central1-docker.pkg.dev/email2podcast/ishmeetss-locust-docker-repo/locust-image:LTF"`                              |
 
 
 ## Getting Started
