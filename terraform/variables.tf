@@ -276,3 +276,12 @@ variable "deployed_index_delete_timeout" {
   description = "Timeout duration for deployed index deletion."
   default     = "2h"
 }
+
+# -----------------------------------------------------------------------------
+# GKE Autopilot Variables
+# -----------------------------------------------------------------------------
+variable "image" {
+  type = string
+  description = "Load testing image name."
+  # No Default - User must provide the image for the locust load testing code.  
+}
