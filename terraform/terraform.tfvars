@@ -1,9 +1,9 @@
 # terraform.tfvars (Root - Example - Public Endpoint)
 
 # --- Global Variables (from root variables.tf) ---
-project_id = "whisper-test-378918" # Replace with your actual project ID
+project_id     = "whisper-test-378918" # Replace with your actual project ID
 project_number = 131502646301      # Replace with your actual Google cloud project number.
-region     = "us-central1"         # Replace with your desired region
+region         = "us-central1"         # Replace with your desired region
 
 # --- Vertex AI Vector Search Module Variables (from modules/vertex-ai-vector-search/variables.tf) ---
 
