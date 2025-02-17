@@ -65,11 +65,3 @@ module "gke_autopilot" {
   project_number = 131502646301
   image          = "us-central1-docker.pkg.dev/email2podcast/ishmeetss-locust-docker-repo/locust-image:LTF"
 }
-
-module "locust" {
-  source = "./modules/locust"
-
-  project_id = var.project_id
-  region     = var.region
-  worker_replicas = 5
-}
