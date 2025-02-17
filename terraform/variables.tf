@@ -5,6 +5,12 @@ variable "project_id" {
   # No default - must be provided - User must set this
 }
 
+variable "project_number" {
+  type = number
+  description = "Your numerical Google Cloud project number. Can be found by running `gcloud projects describe <project_id>` command."
+  # No default - user MUST provide their Google Cloud project number by running the command mentioned in the description.
+}
+
 variable "region" {
   type        = string
   description = "GCP Region for Vertex Search"
