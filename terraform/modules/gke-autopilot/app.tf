@@ -82,6 +82,11 @@ resource "kubernetes_deployment" "locust_worker" {
           image = var.image
           name  = "locust-worker"
           args  = ["-f", "/tasks/public_http_query.py", "--worker", "--master-host", "locust-master"]
+          resources {
+            requests = {
+              cpu = "1000m"
+            }
+          }
         }
       }
     }
@@ -137,5 +142,23 @@ resource "kubernetes_service" "locust_master_web" {
       name = "loc-master-web"
     }
     type = "LoadBalancer"
+  }
+}
+
+resource "kubernetes_horizontal_pod_autoscaler" "locust_worker_autoscaler" {
+  metadata {
+    name = "locust-worker-autoscaler"
+  }
+
+  spec {
+    min_replicas = 1
+    max_replicas = 1000
+
+    scale_target_ref {
+      api_version = "apps/v1"
+      kind = "Deployment"
+      name = "locust-worker"
+    }
+    target_cpu_utilization_percentage = 50
   }
 }
