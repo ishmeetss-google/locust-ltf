@@ -62,6 +62,6 @@ module "gke_autopilot" {
 
   project_id     = var.project_id
   region         = var.region
-  project_number = 131502646301
-  image          = "us-central1-docker.pkg.dev/email2podcast/ishmeetss-locust-docker-repo/locust-image:LTF"
+  project_number = var.project_number
+  image          = var.image
 }
