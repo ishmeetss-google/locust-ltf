@@ -17,5 +17,4 @@ variable "region" {
 variable "image" {
     type = string
     description = "Load testing image name."
-    default = "us-central1-docker.pkg.dev/email2podcast/ishmeetss-locust-docker-repo/locust-image:LTF"
 }

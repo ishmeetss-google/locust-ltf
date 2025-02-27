@@ -1,15 +1,15 @@
 # terraform.tfvars (Root - Example - Public Endpoint)
 
 # --- Global Variables (from root variables.tf) ---
-project_id     = "whisper-test-378918" # Replace with your actual project ID
-project_number = 131502646301      # Replace with your actual Google cloud project number.
+project_id     = "zinc-forge-302418" # Replace with your actual project ID
+project_number = 889751548103 # Replace with your actual Google cloud project number.
 region         = "us-central1"         # Replace with your desired region
 
 # --- Vertex AI Vector Search Module Variables (from modules/vertex-ai-vector-search/variables.tf) ---
 
 # -- Cloud Storage Bucket (Existing) --
-existing_bucket_name = "vector-load-testing" # Replace with your actual bucket name
-embedding_data_path  = "dataset"             # Replace with your embedding folder path
+existing_bucket_name = "edp_test_data" # Replace with your actual bucket name
+embedding_data_path  = "edp_test_data"             # Replace with your embedding folder path
 
 # -- Index Settings --
 index_dimensions                  = 768 # default vablues
@@ -22,4 +22,4 @@ endpoint_public_endpoint_enabled = true # Enable public endpoint
 deployed_index_resource_type = "automatic" # Or "dedicated"
 
 # -- GKE Autopilot Settings --
-image = "us-central1-docker.pkg.dev/email2podcast/ishmeetss-locust-docker-repo/locust-image:LTF"
+image = "us-central1-docker.pkg.dev/zinc-forge-302418/locust-docker-repo/locust-load-test:LTF"

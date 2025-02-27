@@ -1,9 +1,24 @@
 # modules/vertex-ai-vector-search/main.tf
 
 # -----------------------------------------------------------------------------
+# Time Static Resource for Deployment Start
+# -----------------------------------------------------------------------------
+resource "time_static" "deployment_start" {
+  triggers = {
+    # This will be updated whenever any of the vector search resources change
+    vector_search_config = jsonencode({
+      index_id     = var.vector_search_index_id
+      endpoint_id  = var.endpoint_display_name
+      deployed_id  = var.deployed_index_id
+    })
+  }
+}
+
+# -----------------------------------------------------------------------------
 # Vertex AI Index Resource
 # -----------------------------------------------------------------------------
 resource "google_vertex_ai_index" "vector_index" {
+  project      = var.project_id
   count        = var.vector_search_index_id == null ? 1 : 0
   region       = var.region
   display_name = var.index_display_name
@@ -58,6 +73,7 @@ locals {
 # Vertex AI Index Endpoint Resource
 # -----------------------------------------------------------------------------
 resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
+  project                 = var.project_id
   region                  = var.region
   display_name            = var.endpoint_display_name
   description             = var.endpoint_description
@@ -83,25 +99,30 @@ resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
 # -----------------------------------------------------------------------------
 # Vertex AI Deployed Index Resource (Deploy Index to Endpoint)
 # -----------------------------------------------------------------------------
+
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index" {
   depends_on        = [google_vertex_ai_index_endpoint.vector_index_endpoint]
   index_endpoint    = google_vertex_ai_index_endpoint.vector_index_endpoint.id
   index             = local.index_id
-  deployed_index_id = var.deployed_index_id
+  # Simplified deployed_index_id using random suffix
+  deployed_index_id = "${var.deployed_index_id}_${random_id.suffix.hex}"
 
-  # Corrected dynamic block for dedicated resources:
+  # Rest of the configuration remains the same
   dynamic "dedicated_resources" {
     for_each = var.deployed_index_resource_type == "dedicated" ? [1] : []
     content {
       min_replica_count = var.deployed_index_dedicated_min_replicas
       max_replica_count = var.deployed_index_dedicated_max_replicas
-      machine_spec { # machine_spec block
+      machine_spec {
         machine_type = var.deployed_index_dedicated_machine_type
       }
     }
   }
 
-  # Dynamic block for automatic resources configuration
   dynamic "automatic_resources" {
     for_each = var.deployed_index_resource_type == "automatic" ? [1] : []
     content {
@@ -110,8 +131,7 @@ resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index
     }
   }
 
-  # Set reserved_ip_ranges directly, conditionally using a ternary operator:
-  reserved_ip_ranges = var.deployed_index_reserved_ip_ranges == null ? null : var.deployed_index_reserved_ip_ranges
+  reserved_ip_ranges = var.deployed_index_reserved_ip_ranges
 
   timeouts {
     create = var.deployed_index_create_timeout

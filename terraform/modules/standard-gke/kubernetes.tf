@@ -32,7 +32,7 @@ resource "kubernetes_deployment_v1" "locust_master" {
 
       spec {
         container {
-          image = "us-central1-docker.pkg.dev/email2podcast/ishmeetss-locust-docker-repo/locust-image:LTF"
+          image = "us-central1-docker.pkg.dev/email2podcast1111/ishmeetss-locust-docker-repo/locust-image:LTF"
           name  = "locust-master"
           args  = ["-f", "/tasks/public_http_query.py", "--master", "--class-picker"]
 
@@ -75,7 +75,7 @@ resource "kubernetes_deployment_v1" "locust_worker" {
       }
       spec {
         container {
-          image = "us-central1-docker.pkg.dev/email2podcast/ishmeetss-locust-docker-repo/locust-image:LTF"
+          image = "us-central1-docker.pkg.dev/email2podcast1111/ishmeetss-locust-docker-repo/locust-image:LTF"
           name  = "locust-worker"
           args  = ["-f", "/tasks/public_http_query.py", "--worker", "--master-host", "locust-master"]
         }

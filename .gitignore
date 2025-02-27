@@ -3,10 +3,16 @@
 # Local .terraform directories
 **/.terraform/*
 **/.terraform.*
+terraform.tfvars
 
 # .tfstate files - State files should not be committed, especially not production state!
 *.tfstate
 *.tfstate.*
+*.pyc
+venv_vslt/*
+test/*
+.history/*
+__pycache__/*
 
 # Crash log files
 crash.log
