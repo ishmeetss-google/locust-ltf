@@ -16,7 +16,7 @@ resource "google_project_iam_binding" "aiplatform_viewer_k8s_binding" {
   role    = "roles/aiplatform.viewer"
   members = [
     "principal://iam.googleapis.com/projects/${var.project_number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/default/sa/default",
-    # "serviceAccount:${local.service_account_email}"  
+    "serviceAccount:${google_service_account.service_account.email}",
     ]
 }
 
