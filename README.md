@@ -61,7 +61,7 @@ sudo apt-get install kubectl
 ## Step 9: Configure Cluster Access
 Set up authentication for the GKE cluster.
 ```bash
-gcloud container clusters get-credentials ishmeetss-locust --location us-central1
+gcloud container clusters get-credentials ltf-autopilot-cluster --location us-central1
 ```
 
 ## Step 10: Scale Cluster
