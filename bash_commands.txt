@@ -8,7 +8,7 @@ export FILENAME="/tasks/public_http_query.py"
 ! All the required variables in the terraform infrastructure.
 ! Need to get the dimension for the vector search index. So that we can pass that number to the locust script before creating the docker image.
 
---- provided by the customer: start ---
+--- provided by the customer: end ---
 
 export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 
@@ -34,8 +34,7 @@ cd terraform
 ---
 Since index is already deployed adding the setting the value of following variables in 
 terraform.tfvars file.
-vector_search_index_id            = "projects/email2podcast/locations/us-central1/indexes/4489662217976807424
-"
+vector_search_index_id            = "projects/email2podcast/locations/us-central1/indexes/4489662217976807424" # You have to change it according to your vs index id.
 ---
 
 terraform init
@@ -65,3 +64,4 @@ EOF"
 
 gcloud compute ssh ltf-nginx-proxy --project ${PROJECT_ID} --zone ${ZONE} -- -NL 8089:localhost:8089
 
+# You can access the locust at localhost:8089.
