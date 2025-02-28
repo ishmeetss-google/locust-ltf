@@ -1,0 +1,43 @@
+--- provided by the customer: start ---
+
+export PROJECT_ID="email2podcast"
+export REGION="us-central1"
+export FILENAME="/tasks/public_http_query.py"
+
+! All the required variables in the terraform infrastructure.
+
+--- provided by the customer: start ---
+
+export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
+
+gcloud services list
+
+gcloud services enable aiplatform.googleapis.com \
+ artifactregistry.googleapis.com \
+ compute.googleapis.com \
+ autoscaling.googleapis.com \
+ container.googleapis.com \
+ iamcredentials.googleapis.com \
+ cloudbuild.googleapis.com \
+ iam.googleapis.com
+
+gcloud artifacts repositories create locust-docker-repo --repository-format=docker --location=${REGION} --project=${PROJECT_ID}
+
+export DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo/locust-image:LTF"
+
+gcloud builds submit --project=${PROJECT_ID} --tag ${DOCKER_IMAGE}
+
+cd terraform
+
+---
+Since index is already deployed adding the setting the value of following variables in 
+terraform.tfvars file.
+vector_search_index_id            = "projects/email2podcast/locations/us-central1/indexes/4489662217976807424
+"
+---
+
+terraform init
+
+terraform plan
+
+terraform apply
