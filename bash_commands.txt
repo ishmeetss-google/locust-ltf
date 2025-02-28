@@ -2,6 +2,7 @@
 
 export PROJECT_ID="email2podcast"
 export REGION="us-central1"
+export ZONE="us-central1-a"
 export FILENAME="/tasks/public_http_query.py"
 
 ! All the required variables in the terraform infrastructure.
