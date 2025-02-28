@@ -5,19 +5,19 @@ This guide demonstrates how to set up a distributed load testing environment usi
 ## Step 1: Create Docker Repository
 Create an Artifact Registry repository to store our Locust Docker images.
 ```bash
-gcloud artifacts repositories create ishmeetss-locust-docker-repo --repository-format=docker --location=us-central1 --description="Docker repository for the locust load testing"
+gcloud artifacts repositories create locust-docker-repo --repository-format=docker --location=us-central1 --description="Docker repository for the locust load testing" --project=<project-name>
 ```
 
 ## Step 2: Build and Submit Docker Image
 Build and push the Locust Docker image to our repository.
 ```bash
-gcloud builds submit --tag us-central1-docker.pkg.dev/email2podcast/ishmeetss-locust-docker-repo/locust-image:LTF
+gcloud builds submit --tag us-central1-docker.pkg.dev/<project-name>/locust-docker-repo/locust-image:LTF
 ```
 
 ## Step 3: Verify Project Configuration
 Check project details to ensure proper setup and access.
 ```bash
-gcloud projects describe email2podcast
+gcloud projects describe <project-name>
 ```
 
 ## Step 4: Check Available IAM Roles
