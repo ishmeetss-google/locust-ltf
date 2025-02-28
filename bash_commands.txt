@@ -42,3 +42,8 @@ terraform init
 terraform plan
 
 terraform apply
+
+gcloud container clusters get-credentials ltf-autopilot-cluster --project=${PROJECT_ID} --location=${REGION}
+
+export INTERNAL_LB_IP=$(kubectl get svc locust-master-web -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
+
