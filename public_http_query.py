@@ -92,12 +92,12 @@ def _(parser):
 class VectorSearchPublicEndpointHttpUser(FastHttpUser):
     """User that connects to Vector Search public endpoint using http."""
     wait_time = between(1, 2)
-    
+    host = f'https://{config.get('ENDPOINT_HOST')}'
+
     def __init__(self, environment: env.Environment):
         super().__init__(environment)
-        # if hasattr(environment.parsed_options, 'endpoint_host'):
-        #     environment.host = environment.parsed_options.endpoint_host
-        
+        # self.host = config.get('ENDPOINT_HOST')
+
         self.credentials, _ = google.auth.default(
             scopes=["https://www.googleapis.com/auth/cloud-platform"]
         )

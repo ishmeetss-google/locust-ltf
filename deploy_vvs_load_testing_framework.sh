@@ -5,7 +5,7 @@ set -e  # Exit on any error
 export PROJECT_ID="vertex-platform"
 export REGION="us-central1"
 export ZONE="us-central1-a"
-export DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo/locust-load-test:LTF-v2"
+export DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo/locust-load-test:LTF-v1"
 export INDEX_DIMENSIONS=768
 export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 
