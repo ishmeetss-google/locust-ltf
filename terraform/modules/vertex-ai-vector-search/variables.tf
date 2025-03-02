@@ -108,7 +108,7 @@ variable "index_update_method" {
 variable "index_create_timeout" {
   type        = string
   description = "Timeout duration for index creation."
-  default     = "2h"
+  default     = "6h"
 }
 
 variable "index_update_timeout" {
@@ -120,7 +120,7 @@ variable "index_update_timeout" {
 variable "index_delete_timeout" {
   type        = string
   description = "Timeout duration for index deletion."
-  default     = "2h"
+  default     = "5h"
 }
 
 # -----------------------------------------------------------------------------
