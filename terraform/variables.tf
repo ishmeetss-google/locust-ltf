@@ -6,7 +6,7 @@ variable "project_id" {
 }
 
 variable "project_number" {
-  type = number
+  type        = number
   description = "Your numerical Google Cloud project number. Can be found by running `gcloud projects describe <project_id>` command."
   # No default - user MUST provide their Google Cloud project number by running the command mentioned in the description.
 }
@@ -25,13 +25,13 @@ variable "region" {
 variable "existing_bucket_name" {
   type        = string
   description = "Name of the EXISTING Cloud Storage bucket containing index data"
-  # No default - user MUST provide their existing bucket name
+  default     = ""
 }
 
 variable "embedding_data_path" {
   type        = string
   description = "Path WITHIN the existing Cloud Storage bucket where index data is located"
-  # No default - user MUST provide their existing bucket name
+  default     = ""
 }
 
 # -----------------------------------------------------------------------------
@@ -281,7 +281,7 @@ variable "deployed_index_delete_timeout" {
 # GKE Autopilot Variables
 # -----------------------------------------------------------------------------
 variable "image" {
-  type = string
+  type        = string
   description = "Load testing image name."
   # No Default - User must provide the image for the locust load testing code.  
 }

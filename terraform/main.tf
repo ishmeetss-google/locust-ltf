@@ -60,8 +60,8 @@ module "vector_search" {
 module "gke_autopilot" {
   source = "./modules/gke-autopilot"
 
-  project_id     = var.project_id
-  region         = var.region
-  project_number = var.project_number
-  image          = var.image
+  project_id                               = var.project_id
+  region                                   = var.region
+  project_number                           = var.project_number
+  image                                    = var.image
 }

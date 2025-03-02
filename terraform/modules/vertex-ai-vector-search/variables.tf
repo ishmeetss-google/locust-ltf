@@ -6,13 +6,13 @@
 variable "existing_bucket_name" {
   type        = string
   description = "Name of the EXISTING Cloud Storage bucket containing index data"
-  # No default - user MUST provide their existing bucket name
+  default     = ""
 }
 
 variable "embedding_data_path" {
   type        = string
   description = "Path WITHIN the existing Cloud Storage bucket where index data is located"
-  # No default - user MUST provide their existing bucket name
+  default     = ""
 }
 
 # -----------------------------------------------------------------------------
