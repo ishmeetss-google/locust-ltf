@@ -20,6 +20,16 @@ resource "google_project_iam_binding" "aiplatform_viewer_k8s_binding" {
     ]
 }
 
+resource "kubernetes_config_map" "locust_config" {
+  metadata {
+    name = "locust-config"
+  }
+
+  data = {
+    "locust_config.env" = file("${path.module}/../../../config/locust_config.env")
+  }
+}
+
 resource "kubernetes_deployment" "locust_master" {
   metadata {
     name = "locust-master"
@@ -38,9 +48,21 @@ resource "kubernetes_deployment" "locust_master" {
       }
       spec {
         automount_service_account_token = true
+          volume {
+            name = "locust-config"
+            config_map {
+              name = kubernetes_config_map.locust_config.metadata[0].name
+              default_mode = "0644"
+            }
+          }
         container {
           image = var.image
           name  = "locust-master"
+          volume_mount {
+            name       = "locust-config"
+            mount_path = "/tasks/locust_config.env"
+            sub_path   = "locust_config.env"
+          }
           args  = ["-f", "/tasks/public_http_query.py", "--master", "--class-picker"]
           port {
             container_port = 8089
@@ -78,9 +100,22 @@ resource "kubernetes_deployment" "locust_worker" {
       }
       spec {
         automount_service_account_token = true
+
+        volume {
+            name = "locust-config"
+            config_map {
+              name = kubernetes_config_map.locust_config.metadata[0].name
+              default_mode = "0644"
+            }
+          }
         container {
           image = var.image
           name  = "locust-worker"
+          volume_mount {
+            name       = "locust-config"
+            mount_path = "/tasks/locust_config.env"
+            sub_path   = "locust_config.env"
+          }
           args  = ["-f", "/tasks/public_http_query.py", "--worker", "--master-host", "locust-master"]
           resources {
             requests = {

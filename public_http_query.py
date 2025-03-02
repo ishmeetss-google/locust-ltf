@@ -82,12 +82,6 @@ def _(parser):
         help="Whether to return full datapoints. Needed only for query.",
     )
     parser.add_argument(
-        "--host",
-        type=str,
-        default=f"https://{config.get('ENDPOINT_HOST', '')}",
-        help="Vector Search endpoint host",
-    )
-    parser.add_argument(
         "--project-id",
         type=str,
         default=config.get('PROJECT_ID', ""),
@@ -101,8 +95,8 @@ class VectorSearchPublicEndpointHttpUser(FastHttpUser):
     
     def __init__(self, environment: env.Environment):
         super().__init__(environment)
-        # Use host from command line or environment config
-        self.host = environment.host or f"https://{config.get('ENDPOINT_HOST', '')}"
+        # if hasattr(environment.parsed_options, 'endpoint_host'):
+        #     environment.host = environment.parsed_options.endpoint_host
         
         self.credentials, _ = google.auth.default(
             scopes=["https://www.googleapis.com/auth/cloud-platform"]

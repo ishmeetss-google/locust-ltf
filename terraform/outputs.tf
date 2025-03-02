@@ -43,3 +43,8 @@ output "vector_search_deployed_index_endpoint_host" {
   value       = module.vector_search.index_endpoint_public_endpoint
   description = "Vector Search Index REST Endpoint (Domain Name)"
 }
+
+# Add an output for the proxy access instructions
+output "locust_ui_access_instructions" {
+  value = "Run: gcloud compute ssh ${google_compute_instance.nginx_proxy.name} --project ${var.project_id} --zone ${google_compute_instance.nginx_proxy.zone} -- -NL 8089:localhost:8089\nThen open http://localhost:8089 in your browser"
+}

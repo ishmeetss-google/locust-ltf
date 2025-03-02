@@ -65,3 +65,65 @@ module "gke_autopilot" {
   project_number                           = var.project_number
   image                                    = var.image
 }
+
+# Add this to your main.tf file after the modules
+
+resource "google_compute_instance" "nginx_proxy" {
+  name         = "ltf-nginx-proxy"
+  machine_type = "e2-micro"  # Choose an appropriate machine type
+  zone         = "${var.region}-a"  # Adjust as needed
+  project      = var.project_id  # Add this line to specify the project
+
+  
+  boot_disk {
+    initialize_params {
+      image = "cos-cloud/cos-stable"
+    }
+  }
+
+  network_interface {
+    network = "default"
+    access_config {
+      // Ephemeral public IP
+    }
+  }
+
+  metadata = {
+    gce-container-declaration = <<EOT
+spec:
+  containers:
+    - image: 'gcr.io/cloud-marketplace/google/nginx1:latest'
+      name: nginx
+      volumeMounts:
+        - name: 'nginx-config'
+          mountPath: '/etc/nginx/conf.d/default.conf'
+          readOnly: true
+  volumes:
+    - name: 'nginx-config'
+      hostPath:
+        path: '/tmp/server.conf'
+EOT
+    
+    startup-script = <<EOT
+#!/bin/bash
+cat <<EOFNGINX > /tmp/server.conf
+server {
+    listen 8089;
+    location / {
+        proxy_pass http://${module.gke_autopilot.locust_master_web_ip}:8089;
+    }
+}
+EOFNGINX
+EOT
+  }
+
+  service_account {
+    scopes = ["cloud-platform"]
+  }
+
+  # Allow stopping for update
+  allow_stopping_for_update = true
+  
+  depends_on = [module.gke_autopilot]
+}
+

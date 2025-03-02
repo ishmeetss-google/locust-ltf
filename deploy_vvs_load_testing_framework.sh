@@ -5,7 +5,7 @@ set -e  # Exit on any error
 export PROJECT_ID="vertex-platform"
 export REGION="us-central1"
 export ZONE="us-central1-a"
-export DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo/locust-load-test:LTF"
+export DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo/locust-load-test:LTF-v2"
 export INDEX_DIMENSIONS=768
 export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 
@@ -92,7 +92,7 @@ PROJECT_ID=${PROJECT_ID}
 EOF
 
 # Set correct permissions
-chmod 644 config/locust_config.env
+chmod 666 config/locust_config.env
 
 # Phase 2: Build and push Docker image with the config
 echo "Building and pushing Docker image..."
@@ -115,53 +115,17 @@ gcloud container clusters get-credentials ltf-autopilot-cluster --project=${PROJ
 echo "Verifying deployments..."
 kubectl get deployments
 
-# Create nginx proxy for Locust web UI
-echo "Setting up Nginx proxy for Locust web UI..."
-export INTERNAL_LB_IP=$(kubectl get svc locust-master-web -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
-
-# Check if the proxy instance already exists
-PROXY_EXISTS=$(gcloud cßompute instances list --filter="name=ltf-nginx-proxy" --format="value(name)" 2>/dev/null || echo "")
-
-# Create nginx proxy for Locust web UI if it doesn't exist
-echo "Setting up Nginx proxy for Locust web UI..."
-export INTERNAL_LB_IP=$(kubectl get svc locust-master-web -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
-
-if [[ -z "$PROXY_EXISTS" ]]; then
-  gcloud compute instances create-with-container ltf-nginx-proxy \
-    --project ${PROJECT_ID} \
-    --zone ${ZONE} \
-    --container-image gcr.io/cloud-marketplace/google/nginx1:latest \
-    --container-mount-host-path=host-path=/tmp/server.conf,mount-path=/etc/nginx/conf.d/default.conf \
-    --metadata=startup-script="#! /bin/bash
-      cat <<EOFNGINX  > /tmp/server.conf
-      server {
-          listen 8089;
-          location / {
-              proxy_pass http://${INTERNAL_LB_IP}:8089;
-          }
-      }
-EOFNGINX"
-  echo "Created new Nginx proxy instance"
-else
-  echo "Nginx proxy instance already exists. Updating its configuration..."
-  gcloud compute instances update-container ltf-nginx-proxy \
-    --project ${PROJECT_ID} \
-    --zone ${ZONE} \
-    --container-mount-host-path=host-path=/tmp/server.conf,mount-path=/etc/nginx/conf.d/default.conf \
-    --metadata=startup-script="#! /bin/bash
-      cat <<EOFNGINX  > /tmp/server.conf
-      server {
-          listen 8089;
-          location / {
-              proxy_pass http://${INTERNAL_LB_IP}:8089;
-          }
-      }
-EOFNGINX"
-fi
 
 echo "==================================="
 echo "Deployment Complete!"
 echo "==================================="
 echo "Access Locust UI by running:"
+echo "The nginx proxy is managed by Terraform and will be created automatically"
+
+echo "==================================="
+echo "Deployment Complete!"
+echo "==================================="
+echo "Access Locust UI by running the command from the Terraform output:"
+echo "terraform output -raw locust_ui_access_instructions"
 echo "gcloud compute ssh ltf-nginx-proxy --project ${PROJECT_ID} --zone ${ZONE} -- -NL 8089:localhost:8089"
 echo "Then open http://localhost:8089 in your browser"
