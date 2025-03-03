@@ -129,7 +129,7 @@ class VectorSearchPublicEndpointHttpUser(FastHttpUser):
         # Build the base request
         self.request = {
             "deployedIndexId": self.deployed_index_id,
-            "returnFullDatapoint": environment.parsed_options.return_full_datapoint,
+            # "returnFullDatapoint": environment.parsed_options.return_full_datapoint,
         }
         
         dp = {
@@ -142,8 +142,8 @@ class VectorSearchPublicEndpointHttpUser(FastHttpUser):
         self.request["queries"] = [query]
         
         # Add optional parameters if specified
-        if environment.parsed_options.fraction_leaf_nodes_to_search_override > 0:
-            self.request["fractionLeafNodesToSearchOverride"] = environment.parsed_options.fraction_leaf_nodes_to_search_override
+        # if environment.parsed_options.fraction_leaf_nodes_to_search_override > 0:
+            # self.request["fractionLeafNodesToSearchOverride"] = environment.parsed_options.fraction_leaf_nodes_to_search_override
 
     @task
     def findNearestNeighbor(self):

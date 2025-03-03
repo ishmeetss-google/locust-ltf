@@ -6,7 +6,7 @@ vector_search_index_id = "projects/vertex-platform/locations/us-central1/indexes
 index_dimensions = 768
 endpoint_public_endpoint_enabled = true
 deployed_index_resource_type = "automatic"
-image = "us-central1-docker.pkg.dev/vertex-platform/locust-docker-repo/locust-load-test:LTF-20250302194523"
+image = "us-central1-docker.pkg.dev/vertex-platform/locust-docker-repo/locust-load-test:LTF-20250303004016"
 
 # Optional Vector Search Index configuration settings
 # Uncomment and modify these as needed
