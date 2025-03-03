@@ -165,13 +165,36 @@ terraform apply -auto-approve
 echo "Configuring kubectl..."
 gcloud container clusters get-credentials ltf-autopilot-cluster --project=${PROJECT_ID} --location=${REGION}
 
-# Verify the deployments
-echo "Verifying deployments..."
-kubectl get deployments
-
 echo "==================================="
 echo "Deployment Complete!"
 echo "==================================="
-echo "Access Locust UI by running this command:"
-echo "gcloud compute ssh ltf-nginx-proxy --project ${PROJECT_ID} --zone ${ZONE} -- -NL 8089:localhost:8089"
-echo "Then open http://localhost:8089 in your browser"
+
+# Setup access
+read -r -p "Do you need an external IP? (y/n): " need_external_ip
+if [[ "${need_external_ip,,}" =~ ^(y|yes)$ ]]; then
+    kubectl delete svc locust-master-web
+    kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: locust-master-web
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8089
+    targetPort: 8089
+    name: web-ui
+  selector:
+    app: locust-master
+EOF
+    watch kubectl get svc locust-master-web
+    echo "Access Locust UI at http://<external-ip>:8089"
+else
+    echo "Access Locust UI by running:"
+    echo "gcloud compute ssh ltf-nginx-proxy --project ${PROJECT_ID} --zone ${ZONE} -- -NL 8089:localhost:8089"
+    echo "Then open http://localhost:8089 in your browser"
+fi
+
+# Verify deployment
+echo "Verifying deployments..."
+kubectl get deployments
