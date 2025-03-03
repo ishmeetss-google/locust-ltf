@@ -1,22 +1,45 @@
 #!/bin/bash
 set -e  # Exit on any error
 
-# Basic configuration
-export PROJECT_ID="vertex-vision-382819"
-export REGION="us-central1"
-export ZONE="us-central1-a"
-export TIMESTAMP=$(date +%Y%m%d%H%M%S)
-export DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo/locust-load-test:LTF-${TIMESTAMP}"
-export INDEX_DIMENSIONS=768
-export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
+# Check for configuration file
+CONFIG_FILE="config.sh"
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo "Configuration file $CONFIG_FILE not found!"
+  echo "Please copy config.template.sh to config.sh and update with your settings."
+  exit 1
+fi
 
-# Set one of these options:
-# Option 1: Use existing index
-# export VECTOR_SEARCH_INDEX_ID="projects/${PROJECT_ID}/locations/${REGION}/indexes/4705835000090591232"
-# OR
-# Option 2: Create new index (uncomment these if not using existing index)
-export BUCKET_NAME="vector_search_load_testing_5"
-export EMBEDDING_PATH="dataset-laion-100m"
+# Load configuration
+source "$CONFIG_FILE"
+
+# Generate dynamic variables
+TIMESTAMP=$(date +%Y%m%d%H%M%S)
+DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo/locust-load-test:LTF-${TIMESTAMP}"
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
+
+# Print configuration for verification
+echo "==================================="
+echo "Configuration Summary:"
+echo "==================================="
+echo "Project ID: $PROJECT_ID"
+echo "Region: $REGION"
+echo "Zone: $ZONE"
+echo "Timestamp: $TIMESTAMP"
+echo "Docker Image: $DOCKER_IMAGE"
+echo "Index Dimensions: $INDEX_DIMENSIONS"
+echo "Project Number: $PROJECT_NUMBER"
+if [[ -n "$VECTOR_SEARCH_INDEX_ID" ]]; then
+  echo "Using existing Vector Search index: $VECTOR_SEARCH_INDEX_ID"
+else
+  echo "Creating new Vector Search index from data in gs://$BUCKET_NAME/$EMBEDDING_PATH"
+fi
+echo "==================================="
+echo "Continue with deployment? (y/n)"
+read -r confirmation
+if [[ ! "$confirmation" =~ ^[Yy]$ ]]; then
+  echo "Deployment cancelled."
+  exit 0
+fi
 
 # Enable required services
 echo "Enabling required Google Cloud services..."
@@ -28,12 +51,11 @@ gcloud services enable aiplatform.googleapis.com \
   iamcredentials.googleapis.com \
   cloudbuild.googleapis.com \
   iam.googleapis.com \
-  --project=${PROJECT_ID}
-
+  --project="${PROJECT_ID}"
 
 # Create Artifact Registry repository
 echo "Creating Artifact Registry repository..."
-gcloud artifacts repositories create locust-docker-repo --repository-format=docker --location=${REGION} --project=${PROJECT_ID} || true
+gcloud artifacts repositories create locust-docker-repo --repository-format=docker --location="${REGION}" --project="${PROJECT_ID}" || true
 
 # Create config directory
 mkdir -p config
@@ -54,59 +76,52 @@ EOF
 if [[ -n "${VECTOR_SEARCH_INDEX_ID}" ]]; then
   # Using existing index
   echo "vector_search_index_id = \"${VECTOR_SEARCH_INDEX_ID}\"" >> terraform.tfvars
-  echo "Using existing Vector Search index: ${VECTOR_SEARCH_INDEX_ID}"
 else
   # Using bucket and path for new index
   echo "existing_bucket_name = \"${BUCKET_NAME}\"" >> terraform.tfvars
   echo "embedding_data_path = \"${EMBEDDING_PATH}\"" >> terraform.tfvars
-  echo "Creating new Vector Search index from data in gs://${BUCKET_NAME}/${EMBEDDING_PATH}"
 fi
 
 # Add other common settings
 cat <<EOF >> terraform.tfvars
 index_dimensions = ${INDEX_DIMENSIONS}
-endpoint_public_endpoint_enabled = true
-#deployed_index_resource_type = "automatic"
-deployed_index_resource_type = "dedicated"
-deployed_index_dedicated_machine_type = "e2-standard-16"
+deployed_index_resource_type = "${DEPLOYED_INDEX_RESOURCE_TYPE:-dedicated}"
+deployed_index_dedicated_machine_type = "${DEPLOYED_INDEX_DEDICATED_MACHINE_TYPE:-e2-standard-16}"
+endpoint_public_endpoint_enabled = ${ENDPOINT_PUBLIC_ENDPOINT_ENABLED:-true}
 image = "${DOCKER_IMAGE}"
-
-# Optional Vector Search Index configuration settings
-# Uncomment and modify these as needed
-# index_display_name = "my-vector-search-index"
-# index_description = "Vector search index for embeddings"
-# index_labels = { "environment" = "dev", "purpose" = "benchmarking" }
-# index_approximate_neighbors_count = 150
-# index_distance_measure_type = "DOT_PRODUCT_DISTANCE" # Options: COSINE_DISTANCE, EUCLIDEAN_DISTANCE, DOT_PRODUCT_DISTANCE
-# feature_norm_type = "UNIT_L2_NORM" # Options: NONE, UNIT_L2_NORM
-# index_algorithm_config_type = "TREE_AH_ALGORITHM" # Options: TREE_AH_ALGORITHM, BRUTE_FORCE_ALGORITHM
-# index_tree_ah_leaf_node_embedding_count = 1000
-# index_tree_ah_leaf_nodes_to_search_percent = 10
-# index_update_method = "BATCH_UPDATE" # Options: BATCH_UPDATE, STREAM_UPDATE
-
-# Optional Endpoint configuration settings
-# endpoint_display_name = "my-vector-search-endpoint"
-# endpoint_description = "Vector search endpoint for querying"
-# endpoint_labels = { "environment" = "dev", "purpose" = "benchmarking" }
-# endpoint_network = "projects/your-project/global/networks/your-vpc"
-# endpoint_enable_private_service_connect = false
-# endpoint_create_timeout = "60m"
-# endpoint_update_timeout = "60m"
-# endpoint_delete_timeout = "60m"
-
-# Optional Deployed Index configuration settings
-# deployed_index_id = "my-deployed-index"
-# deployed_index_dedicated_machine_type = "e2-standard-4"
-# deployed_index_dedicated_min_replicas = 2
-# deployed_index_dedicated_max_replicas = 5
-# deployed_index_dedicated_cpu_utilization_target = 0.7
-# deployed_index_automatic_min_replicas = 2
-# deployed_index_automatic_max_replicas = 5
-# deployed_index_reserved_ip_ranges = ["ip-range-name-1", "ip-range-name-2"]
-# deployed_index_create_timeout = "60m"
-# deployed_index_update_timeout = "60m"
-# deployed_index_delete_timeout = "60m"
 EOF
+
+# Add optional settings if defined
+[[ -n "$INDEX_DISPLAY_NAME" ]] && echo "index_display_name = \"$INDEX_DISPLAY_NAME\"" >> terraform.tfvars
+[[ -n "$INDEX_DESCRIPTION" ]] && echo "index_description = \"$INDEX_DESCRIPTION\"" >> terraform.tfvars
+[[ -n "$INDEX_LABELS" ]] && echo "index_labels = $INDEX_LABELS" >> terraform.tfvars
+[[ -n "$INDEX_APPROXIMATE_NEIGHBORS_COUNT" ]] && echo "index_approximate_neighbors_count = $INDEX_APPROXIMATE_NEIGHBORS_COUNT" >> terraform.tfvars
+[[ -n "$INDEX_DISTANCE_MEASURE_TYPE" ]] && echo "index_distance_measure_type = \"$INDEX_DISTANCE_MEASURE_TYPE\"" >> terraform.tfvars
+[[ -n "$FEATURE_NORM_TYPE" ]] && echo "feature_norm_type = \"$FEATURE_NORM_TYPE\"" >> terraform.tfvars
+[[ -n "$INDEX_ALGORITHM_CONFIG_TYPE" ]] && echo "index_algorithm_config_type = \"$INDEX_ALGORITHM_CONFIG_TYPE\"" >> terraform.tfvars
+[[ -n "$INDEX_TREE_AH_LEAF_NODE_EMBEDDING_COUNT" ]] && echo "index_tree_ah_leaf_node_embedding_count = $INDEX_TREE_AH_LEAF_NODE_EMBEDDING_COUNT" >> terraform.tfvars
+[[ -n "$INDEX_TREE_AH_LEAF_NODES_TO_SEARCH_PERCENT" ]] && echo "index_tree_ah_leaf_nodes_to_search_percent = $INDEX_TREE_AH_LEAF_NODES_TO_SEARCH_PERCENT" >> terraform.tfvars
+[[ -n "$INDEX_UPDATE_METHOD" ]] && echo "index_update_method = \"$INDEX_UPDATE_METHOD\"" >> terraform.tfvars
+
+[[ -n "$ENDPOINT_DISPLAY_NAME" ]] && echo "endpoint_display_name = \"$ENDPOINT_DISPLAY_NAME\"" >> terraform.tfvars
+[[ -n "$ENDPOINT_DESCRIPTION" ]] && echo "endpoint_description = \"$ENDPOINT_DESCRIPTION\"" >> terraform.tfvars
+[[ -n "$ENDPOINT_LABELS" ]] && echo "endpoint_labels = $ENDPOINT_LABELS" >> terraform.tfvars
+[[ -n "$ENDPOINT_NETWORK" ]] && echo "endpoint_network = \"$ENDPOINT_NETWORK\"" >> terraform.tfvars
+[[ -n "$ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT" ]] && echo "endpoint_enable_private_service_connect = $ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT" >> terraform.tfvars
+[[ -n "$ENDPOINT_CREATE_TIMEOUT" ]] && echo "endpoint_create_timeout = \"$ENDPOINT_CREATE_TIMEOUT\"" >> terraform.tfvars
+[[ -n "$ENDPOINT_UPDATE_TIMEOUT" ]] && echo "endpoint_update_timeout = \"$ENDPOINT_UPDATE_TIMEOUT\"" >> terraform.tfvars
+[[ -n "$ENDPOINT_DELETE_TIMEOUT" ]] && echo "endpoint_delete_timeout = \"$ENDPOINT_DELETE_TIMEOUT\"" >> terraform.tfvars
+
+[[ -n "$DEPLOYED_INDEX_ID" ]] && echo "deployed_index_id = \"$DEPLOYED_INDEX_ID\"" >> terraform.tfvars
+[[ -n "$DEPLOYED_INDEX_DEDICATED_MIN_REPLICAS" ]] && echo "deployed_index_dedicated_min_replicas = $DEPLOYED_INDEX_DEDICATED_MIN_REPLICAS" >> terraform.tfvars
+[[ -n "$DEPLOYED_INDEX_DEDICATED_MAX_REPLICAS" ]] && echo "deployed_index_dedicated_max_replicas = $DEPLOYED_INDEX_DEDICATED_MAX_REPLICAS" >> terraform.tfvars
+[[ -n "$DEPLOYED_INDEX_DEDICATED_CPU_UTILIZATION_TARGET" ]] && echo "deployed_index_dedicated_cpu_utilization_target = $DEPLOYED_INDEX_DEDICATED_CPU_UTILIZATION_TARGET" >> terraform.tfvars
+[[ -n "$DEPLOYED_INDEX_AUTOMATIC_MIN_REPLICAS" ]] && echo "deployed_index_automatic_min_replicas = $DEPLOYED_INDEX_AUTOMATIC_MIN_REPLICAS" >> terraform.tfvars
+[[ -n "$DEPLOYED_INDEX_AUTOMATIC_MAX_REPLICAS" ]] && echo "deployed_index_automatic_max_replicas = $DEPLOYED_INDEX_AUTOMATIC_MAX_REPLICAS" >> terraform.tfvars
+[[ -n "$DEPLOYED_INDEX_RESERVED_IP_RANGES" ]] && echo "deployed_index_reserved_ip_ranges = $DEPLOYED_INDEX_RESERVED_IP_RANGES" >> terraform.tfvars
+[[ -n "$DEPLOYED_INDEX_CREATE_TIMEOUT" ]] && echo "deployed_index_create_timeout = \"$DEPLOYED_INDEX_CREATE_TIMEOUT\"" >> terraform.tfvars
+[[ -n "$DEPLOYED_INDEX_UPDATE_TIMEOUT" ]] && echo "deployed_index_update_timeout = \"$DEPLOYED_INDEX_UPDATE_TIMEOUT\"" >> terraform.tfvars
+[[ -n "$DEPLOYED_INDEX_DELETE_TIMEOUT" ]] && echo "deployed_index_delete_timeout = \"$DEPLOYED_INDEX_DELETE_TIMEOUT\"" >> terraform.tfvars
 
 # Initialize and apply just the vector search module
 terraform init
@@ -137,7 +152,6 @@ chmod 666 ./public_http_query.py
 echo "Building and pushing Docker image..."
 
 # Build and push the Docker image
-# Build and push the Docker image
 gcloud builds submit --project=${PROJECT_ID} --tag ${DOCKER_IMAGE}
 
 # Phase 3: Deploy the rest of the infrastructure
@@ -154,7 +168,6 @@ gcloud container clusters get-credentials ltf-autopilot-cluster --project=${PROJ
 # Verify the deployments
 echo "Verifying deployments..."
 kubectl get deployments
-
 
 echo "==================================="
 echo "Deployment Complete!"
