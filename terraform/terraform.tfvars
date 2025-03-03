@@ -1,12 +1,16 @@
-project_id     = "vertex-platform"
+project_id     = "vertex-vision-382819"
 region         = "us-central1"
-project_number = "158892293228"
+project_number = "599430110932"
 
-vector_search_index_id = "projects/vertex-platform/locations/us-central1/indexes/1688423249752358912"
+existing_bucket_name = "vector_search_load_testing_5"
+embedding_data_path = "dataset-laion-100m"
 index_dimensions = 768
 endpoint_public_endpoint_enabled = true
-deployed_index_resource_type = "automatic"
-image = "us-central1-docker.pkg.dev/vertex-platform/locust-docker-repo/locust-load-test:LTF-20250303004016"
+
+#deployed_index_resource_type = "automatic"
+deployed_index_resource_type = "dedicated"
+deployed_index_dedicated_machine_type = "e2-standard-16"
+image = "us-central1-docker.pkg.dev/vertex-vision-382819/locust-docker-repo/locust-load-test:LTF-20250303141640"
 
 # Optional Vector Search Index configuration settings
 # Uncomment and modify these as needed

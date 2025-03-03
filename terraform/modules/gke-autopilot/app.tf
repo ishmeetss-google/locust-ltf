@@ -11,15 +11,27 @@ provider "kubernetes" {
   ]
 }
 
-resource "google_project_iam_binding" "aiplatform_viewer_k8s_binding" {
+# First binding - just for the GCP service account
+resource "google_project_iam_binding" "aiplatform_viewer_binding" {
   project = var.project_id
   role    = "roles/aiplatform.viewer"
   members = [
-    "principal://iam.googleapis.com/projects/${var.project_number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/default/sa/default",
     "serviceAccount:${google_service_account.service_account.email}",
-    ]
+  ]
 }
 
+# Second binding - for the Kubernetes service account, applied later
+# You can comment this out initially and apply it after the cluster is fully ready
+resource "google_project_iam_member" "aiplatform_viewer_k8s_binding" {
+  project = var.project_id
+  role    = "roles/aiplatform.viewer"
+  member  = "principal://iam.googleapis.com/projects/${var.project_number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/default/sa/default"
+  
+  depends_on = [
+    google_container_cluster.ltf_autopilot_cluster,
+    # Add a time delay or another indicator that the cluster is fully ready
+  ]
+}
 resource "kubernetes_config_map" "locust_config" {
   metadata {
     name = "locust-config"

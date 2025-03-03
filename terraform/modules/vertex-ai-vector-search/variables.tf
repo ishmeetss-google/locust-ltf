@@ -245,17 +245,17 @@ variable "deployed_index_reserved_ip_ranges" {
 variable "deployed_index_create_timeout" {
   type        = string
   description = "Timeout duration for deployed index creation."
-  default     = "2h"
+  default     = "4h"
 }
 variable "deployed_index_update_timeout" {
   type        = string
   description = "Timeout duration for deployed index updates."
-  default     = "1h"
+  default     = "4h"
 }
 variable "deployed_index_delete_timeout" {
   type        = string
   description = "Timeout duration for deployed index deletion."
-  default     = "2h"
+  default     = "4h"
 }
 
 # Passed from the root

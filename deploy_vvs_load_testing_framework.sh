@@ -2,7 +2,7 @@
 set -e  # Exit on any error
 
 # Basic configuration
-export PROJECT_ID="vertex-platform"
+export PROJECT_ID="vertex-vision-382819"
 export REGION="us-central1"
 export ZONE="us-central1-a"
 export TIMESTAMP=$(date +%Y%m%d%H%M%S)
@@ -12,12 +12,11 @@ export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(pro
 
 # Set one of these options:
 # Option 1: Use existing index
-export VECTOR_SEARCH_INDEX_ID="projects/${PROJECT_ID}/locations/${REGION}/indexes/1688423249752358912"
+# export VECTOR_SEARCH_INDEX_ID="projects/${PROJECT_ID}/locations/${REGION}/indexes/4705835000090591232"
 # OR
 # Option 2: Create new index (uncomment these if not using existing index)
-# export BUCKET_NAME="your-bucket-name"
-# export EMBEDDING_PATH="path/to/embeddings"
-
+export BUCKET_NAME="vector_search_load_testing_5"
+export EMBEDDING_PATH="dataset-laion-100m"
 
 # Enable required services
 echo "Enabling required Google Cloud services..."
@@ -28,7 +27,9 @@ gcloud services enable aiplatform.googleapis.com \
   container.googleapis.com \
   iamcredentials.googleapis.com \
   cloudbuild.googleapis.com \
-  iam.googleapis.com
+  iam.googleapis.com \
+  --project=${PROJECT_ID}
+
 
 # Create Artifact Registry repository
 echo "Creating Artifact Registry repository..."
@@ -65,7 +66,9 @@ fi
 cat <<EOF >> terraform.tfvars
 index_dimensions = ${INDEX_DIMENSIONS}
 endpoint_public_endpoint_enabled = true
-deployed_index_resource_type = "automatic"
+#deployed_index_resource_type = "automatic"
+deployed_index_resource_type = "dedicated"
+deployed_index_dedicated_machine_type = "e2-standard-16"
 image = "${DOCKER_IMAGE}"
 
 # Optional Vector Search Index configuration settings
@@ -128,10 +131,12 @@ EOF
 
 # Set correct permissions
 chmod 666 config/locust_config.env
+chmod 666 ./public_http_query.py    
 
 # Phase 2: Build and push Docker image with the config
 echo "Building and pushing Docker image..."
 
+# Build and push the Docker image
 # Build and push the Docker image
 gcloud builds submit --project=${PROJECT_ID} --tag ${DOCKER_IMAGE}
 
