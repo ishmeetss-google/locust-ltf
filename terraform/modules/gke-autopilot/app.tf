@@ -11,13 +11,35 @@ provider "kubernetes" {
   ]
 }
 
-resource "google_project_iam_binding" "aiplatform_viewer_k8s_binding" {
+# First binding - just for the GCP service account
+resource "google_project_iam_binding" "aiplatform_viewer_binding" {
   project = var.project_id
   role    = "roles/aiplatform.viewer"
   members = [
-    "principal://iam.googleapis.com/projects/${var.project_number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/default/sa/default",
     "serviceAccount:${google_service_account.service_account.email}",
-    ]
+  ]
+}
+
+# Second binding - for the Kubernetes service account, applied later
+# You can comment this out initially and apply it after the cluster is fully ready
+resource "google_project_iam_member" "aiplatform_viewer_k8s_binding" {
+  project = var.project_id
+  role    = "roles/aiplatform.viewer"
+  member  = "principal://iam.googleapis.com/projects/${var.project_number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/default/sa/default"
+  
+  depends_on = [
+    google_container_cluster.ltf_autopilot_cluster,
+    # Add a time delay or another indicator that the cluster is fully ready
+  ]
+}
+resource "kubernetes_config_map" "locust_config" {
+  metadata {
+    name = "locust-config"
+  }
+
+  data = {
+    "locust_config.env" = file("${path.module}/../../../config/locust_config.env")
+  }
 }
 
 resource "kubernetes_deployment" "locust_master" {
@@ -38,9 +60,21 @@ resource "kubernetes_deployment" "locust_master" {
       }
       spec {
         automount_service_account_token = true
+          volume {
+            name = "locust-config"
+            config_map {
+              name = kubernetes_config_map.locust_config.metadata[0].name
+              default_mode = "0644"
+            }
+          }
         container {
           image = var.image
           name  = "locust-master"
+          volume_mount {
+            name       = "locust-config"
+            mount_path = "/tasks/locust_config.env"
+            sub_path   = "locust_config.env"
+          }
           args  = ["-f", "/tasks/public_http_query.py", "--master", "--class-picker"]
           port {
             container_port = 8089
@@ -78,9 +112,22 @@ resource "kubernetes_deployment" "locust_worker" {
       }
       spec {
         automount_service_account_token = true
+
+        volume {
+            name = "locust-config"
+            config_map {
+              name = kubernetes_config_map.locust_config.metadata[0].name
+              default_mode = "0644"
+            }
+          }
         container {
           image = var.image
           name  = "locust-worker"
+          volume_mount {
+            name       = "locust-config"
+            mount_path = "/tasks/locust_config.env"
+            sub_path   = "locust_config.env"
+          }
           args  = ["-f", "/tasks/public_http_query.py", "--worker", "--master-host", "locust-master"]
           resources {
             requests = {

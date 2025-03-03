@@ -7,9 +7,9 @@ resource "time_static" "deployment_start" {
   triggers = {
     # This will be updated whenever any of the vector search resources change
     vector_search_config = jsonencode({
-      index_id     = var.vector_search_index_id
-      endpoint_id  = var.endpoint_display_name
-      deployed_id  = var.deployed_index_id
+      index_id    = var.vector_search_index_id
+      endpoint_id = var.endpoint_display_name
+      deployed_id = var.deployed_index_id
     })
   }
 }
@@ -105,9 +105,9 @@ resource "random_id" "suffix" {
 }
 
 resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index" {
-  depends_on        = [google_vertex_ai_index_endpoint.vector_index_endpoint]
-  index_endpoint    = google_vertex_ai_index_endpoint.vector_index_endpoint.id
-  index             = local.index_id
+  depends_on     = [google_vertex_ai_index_endpoint.vector_index_endpoint]
+  index_endpoint = google_vertex_ai_index_endpoint.vector_index_endpoint.id
+  index          = local.index_id
   # Simplified deployed_index_id using random suffix
   deployed_index_id = "${var.deployed_index_id}_${random_id.suffix.hex}"
 

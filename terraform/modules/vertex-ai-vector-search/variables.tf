@@ -6,13 +6,13 @@
 variable "existing_bucket_name" {
   type        = string
   description = "Name of the EXISTING Cloud Storage bucket containing index data"
-  # No default - user MUST provide their existing bucket name
+  default     = ""
 }
 
 variable "embedding_data_path" {
   type        = string
   description = "Path WITHIN the existing Cloud Storage bucket where index data is located"
-  # No default - user MUST provide their existing bucket name
+  default     = ""
 }
 
 # -----------------------------------------------------------------------------
@@ -108,7 +108,7 @@ variable "index_update_method" {
 variable "index_create_timeout" {
   type        = string
   description = "Timeout duration for index creation."
-  default     = "2h"
+  default     = "6h"
 }
 
 variable "index_update_timeout" {
@@ -120,7 +120,7 @@ variable "index_update_timeout" {
 variable "index_delete_timeout" {
   type        = string
   description = "Timeout duration for index deletion."
-  default     = "2h"
+  default     = "5h"
 }
 
 # -----------------------------------------------------------------------------
@@ -245,17 +245,17 @@ variable "deployed_index_reserved_ip_ranges" {
 variable "deployed_index_create_timeout" {
   type        = string
   description = "Timeout duration for deployed index creation."
-  default     = "2h"
+  default     = "4h"
 }
 variable "deployed_index_update_timeout" {
   type        = string
   description = "Timeout duration for deployed index updates."
-  default     = "1h"
+  default     = "4h"
 }
 variable "deployed_index_delete_timeout" {
   type        = string
   description = "Timeout duration for deployed index deletion."
-  default     = "2h"
+  default     = "4h"
 }
 
 # Passed from the root

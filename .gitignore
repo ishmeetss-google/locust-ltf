@@ -1,4 +1,19 @@
 # .gitignore for Terraform
+config.sh
+
+# Temporary files
+config/locust_config.env
+
+# Terraform state files
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+
+# Other generated files
+*.log
+
 
 # Local .terraform directories
 **/.terraform/*
