@@ -59,6 +59,10 @@ gcloud artifacts repositories create locust-docker-repo --repository-format=dock
 
 # Create config directory
 mkdir -p config
+touch config/locust_config.env
+# Set correct permissions
+chmod 666 ./public_http_query.py    
+chmod 666 config/locust_config.env
 
 # Phase 1: Deploy Vector Search infrastructure first
 echo "Deploying Vector Search infrastructure..."
@@ -143,10 +147,6 @@ INDEX_ENDPOINT_ID=${VS_INDEX_ENDPOINT_ID}
 ENDPOINT_HOST=${VS_ENDPOINT_HOST}
 PROJECT_ID=${PROJECT_ID}
 EOF
-
-# Set correct permissions
-chmod 666 config/locust_config.env
-chmod 666 ./public_http_query.py    
 
 # Phase 2: Build and push Docker image with the config
 echo "Building and pushing Docker image..."
