@@ -84,14 +84,14 @@ variable "index_algorithm_config_type" {
 variable "index_tree_ah_leaf_node_embedding_count" {
   type        = number
   description = "Leaf node embedding count for tree-AH algorithm"
-  default     = 500
+  default     = 1000
   nullable    = false # This parameter is required when using tree_ah_config
 }
 
 variable "index_tree_ah_leaf_nodes_to_search_percent" {
   type        = number
   description = "Leaf nodes to search percent for tree-AH algorithm"
-  default     = 7
+  default     = 10
   nullable    = false # This parameter is required when using tree_ah_config
 }
 
@@ -215,12 +215,6 @@ variable "deployed_index_dedicated_max_replicas" {
   type        = number
   description = "Maximum number of replicas for dedicated resources (for autoscaling)."
   default     = 3
-}
-
-variable "deployed_index_dedicated_cpu_utilization_target" {
-  type        = number
-  description = "Target CPU utilization percentage for autoscaling (dedicated resources)."
-  default     = 70
 }
 
 # Automatic Resources

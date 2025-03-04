@@ -236,12 +236,6 @@ variable "deployed_index_dedicated_max_replicas" {
   default     = 3
 }
 
-variable "deployed_index_dedicated_cpu_utilization_target" {
-  type        = number
-  description = "Target CPU utilization percentage for autoscaling (dedicated resources)."
-  default     = 70
-}
-
 # Automatic Resources
 variable "deployed_index_automatic_min_replicas" {
   type        = number

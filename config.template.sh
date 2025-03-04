@@ -21,7 +21,7 @@ EMBEDDING_PATH="your-embedding-folder"
 ENDPOINT_PUBLIC_ENDPOINT_ENABLED=true
 
 # Optional Deployed Index configuration settings
-DEPLOYED_INDEX_RESOURCE_TYPE="automatic"  # Options: automatic, dedicated
+DEPLOYED_INDEX_RESOURCE_TYPE="dedicated "  # Options: automatic, dedicated
 
 
 # Optional Vector Search Index configuration settings
@@ -50,10 +50,9 @@ DEPLOYED_INDEX_RESOURCE_TYPE="automatic"  # Options: automatic, dedicated
 # Optional Deployed Index configuration settings
 # DEPLOYED_INDEX_ID="my-deployed-index"
 # DEPLOYED_INDEX_RESOURCE_TYPE="dedicated"  # Options: automatic, dedicated
-# DEPLOYED_INDEX_DEDICATED_MACHINE_TYPE="e2-standard-16"
+# DEPLOYED_INDEX_DEDICATED_MACHINE_TYPE="e2-highmen-16"
 # DEPLOYED_INDEX_DEDICATED_MIN_REPLICAS=2
 # DEPLOYED_INDEX_DEDICATED_MAX_REPLICAS=5
-# DEPLOYED_INDEX_DEDICATED_CPU_UTILIZATION_TARGET=0.7
 # DEPLOYED_INDEX_AUTOMATIC_MIN_REPLICAS=2
 # DEPLOYED_INDEX_AUTOMATIC_MAX_REPLICAS=5
 # DEPLOYED_INDEX_RESERVED_IP_RANGES='["ip-range-name-1", "ip-range-name-2"]'

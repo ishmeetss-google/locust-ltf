@@ -48,7 +48,6 @@ module "vector_search" {
   deployed_index_dedicated_machine_type           = var.deployed_index_dedicated_machine_type
   deployed_index_dedicated_min_replicas           = var.deployed_index_dedicated_min_replicas
   deployed_index_dedicated_max_replicas           = var.deployed_index_dedicated_max_replicas
-  deployed_index_dedicated_cpu_utilization_target = var.deployed_index_dedicated_cpu_utilization_target
   deployed_index_automatic_min_replicas           = var.deployed_index_automatic_min_replicas
   deployed_index_automatic_max_replicas           = var.deployed_index_automatic_max_replicas
   deployed_index_reserved_ip_ranges               = var.deployed_index_reserved_ip_ranges
