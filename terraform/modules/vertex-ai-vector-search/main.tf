@@ -25,12 +25,14 @@ resource "google_vertex_ai_index" "vector_index" {
   description  = var.index_description
   labels       = var.index_labels
 
+
   metadata {
     contents_delta_uri = "gs://${var.existing_bucket_name}/${var.embedding_data_path}"
     config {
       dimensions                  = var.index_dimensions
       approximate_neighbors_count = var.index_approximate_neighbors_count
       distance_measure_type       = var.index_distance_measure_type
+      shard_size                  = var.shard_size
       feature_norm_type           = var.feature_norm_type
 
       dynamic "algorithm_config" {

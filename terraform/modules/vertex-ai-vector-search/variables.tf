@@ -24,6 +24,16 @@ variable "index_display_name" {
   default     = "load-testing-search-index" # Default display name, can be customized
 }
 
+variable "shard_size" {
+  type        = string
+  description = "Shard size for the Vector Search index (SHARD_SIZE_SMALL, SHARD_SIZE_MEDIUM, SHARD_SIZE_LARGE)"
+  default     = "SHARD_SIZE_MEDIUM"  
+  validation {
+    condition     = contains(["SHARD_SIZE_SMALL", "SHARD_SIZE_MEDIUM", "SHARD_SIZE_LARGE"], var.shard_size)
+    error_message = "Invalid value for shard_size. Must be one of: SHARD_SIZE_SMALL, SHARD_SIZE_MEDIUM, SHARD_SIZE_LARGE."
+  }
+}
+
 variable "index_description" {
   type        = string
   description = "Description for the Vector Index"
