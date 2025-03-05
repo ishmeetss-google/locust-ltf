@@ -120,7 +120,7 @@ variable "index_tree_ah_leaf_node_embedding_count" {
 variable "index_tree_ah_leaf_nodes_to_search_percent" {
   type        = number
   description = "Leaf nodes to search percent for tree-AH algorithm"
-  default     = 1000
+  default     = 10
   nullable    = false # This parameter is required when using tree_ah_config
 }
 
