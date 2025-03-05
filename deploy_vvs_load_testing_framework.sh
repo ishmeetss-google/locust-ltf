@@ -41,6 +41,12 @@ if [[ ! "$confirmation" =~ ^[Yy]$ ]]; then
   exit 0
 fi
 
+# Ask about external IP preference early
+read -r -p "Do you need an external IP? (y/n): " need_external_ip
+export need_external_ip
+
+echo "External IP requested status =" $need_external_ip
+
 # Enable required services
 echo "Enabling required Google Cloud services..."
 gcloud services enable aiplatform.googleapis.com \
@@ -170,7 +176,6 @@ echo "Deployment Complete!"
 echo "==================================="
 
 # Setup access
-read -r -p "Do you need an external IP? (y/n): " need_external_ip
 if [[ "${need_external_ip,,}" =~ ^(y|yes)$ ]]; then
     kubectl delete svc locust-master-web
     kubectl apply -f - <<EOF
@@ -187,8 +192,22 @@ spec:
   selector:
     app: locust-master
 EOF
-    watch kubectl get svc locust-master-web
-    echo "Access Locust UI at http://<external-ip>:8089"
+# Wait for the external IP to be assigned
+echo "Waiting for external IP to be assigned..."
+while true; do
+  EXTERNAL_IP=$(kubectl get svc locust-master-web -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  if [ -n "$EXTERNAL_IP" ]; then
+    break
+  fi
+  echo "Still waiting for external IP..."
+  sleep 5
+done
+
+# Display the service information
+kubectl get svc locust-master-web
+
+# Print the access URL with the actual IP
+echo "Access Locust UI at http://$EXTERNAL_IP:8089"
 else
     echo "Access Locust UI by running:"
     echo "gcloud compute ssh ltf-nginx-proxy --project ${PROJECT_ID} --zone ${ZONE} -- -NL 8089:localhost:8089"
