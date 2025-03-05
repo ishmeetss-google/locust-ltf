@@ -32,7 +32,7 @@ resource "google_vertex_ai_index" "vector_index" {
       dimensions                  = var.index_dimensions
       approximate_neighbors_count = var.index_approximate_neighbors_count
       distance_measure_type       = var.index_distance_measure_type
-      shard_size                  = var.shard_size
+      shard_size                  = var.index_shard_size
       feature_norm_type           = var.feature_norm_type
 
       dynamic "algorithm_config" {

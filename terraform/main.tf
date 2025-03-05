@@ -26,6 +26,7 @@ module "vector_search" {
   index_dimensions                                = var.index_dimensions
   index_approximate_neighbors_count               = var.index_approximate_neighbors_count
   index_distance_measure_type                     = var.index_distance_measure_type
+  index_shard_size                                = var.index_shard_size
   feature_norm_type                               = var.feature_norm_type
   index_algorithm_config_type                     = var.index_algorithm_config_type
   index_tree_ah_leaf_node_embedding_count         = var.index_tree_ah_leaf_node_embedding_count

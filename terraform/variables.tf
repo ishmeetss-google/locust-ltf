@@ -84,6 +84,16 @@ variable "index_distance_measure_type" {
   }
 }
 
+variable "index_shard_size" {
+  type        = string
+  description = "Shard size for the Vector Search index (SHARD_SIZE_SMALL, SHARD_SIZE_MEDIUM, SHARD_SIZE_LARGE)"
+  default     = "SHARD_SIZE_MEDIUM"  
+  validation {
+    condition     = contains(["SHARD_SIZE_SMALL", "SHARD_SIZE_MEDIUM", "SHARD_SIZE_LARGE"], var.index_shard_size)
+    error_message = "Invalid value for shard_size. Must be one of: SHARD_SIZE_SMALL, SHARD_SIZE_MEDIUM, SHARD_SIZE_LARGE."
+  }
+}
+
 variable "feature_norm_type" {
   type        = string
   description = "Type of normalization to be carried out on each vector. Can be UNIT_L2_NORM or NONE"
