@@ -113,14 +113,14 @@ variable "index_algorithm_config_type" {
 variable "index_tree_ah_leaf_node_embedding_count" {
   type        = number
   description = "Leaf node embedding count for tree-AH algorithm"
-  default     = 500
+  default     = 1000
   nullable    = false # This parameter is required when using tree_ah_config
 }
 
 variable "index_tree_ah_leaf_nodes_to_search_percent" {
   type        = number
   description = "Leaf nodes to search percent for tree-AH algorithm"
-  default     = 7
+  default     = 1000
   nullable    = false # This parameter is required when using tree_ah_config
 }
 
