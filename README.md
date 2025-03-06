@@ -4,54 +4,9 @@ This repository contains tools to deploy and run load tests against Google Cloud
 
 ## Overview
 
-The deployment script automates the following process:
+The deployment script automates the deployment of the infrastructre and load test defined in the `locust_tests` directory as a simplifed way of getting up and running to performing load tests.
 
-## Step 1: Initial Setup and Configuration
-- Verifies the existence of a configuration file
-- Loads settings from `config.sh`
-- Generates dynamic variables including timestamps and Docker image names
-- Displays configuration summary for verification
-- Prompts for user confirmation to proceed
-
-## Step 2: Enable Required Google Cloud Services
-- Enables necessary APIs:
-  - AI Platform
-  - Artifact Registry
-  - Compute Engine
-  - Autoscaling
-  - Google Kubernetes Engine
-  - IAM Credentials
-  - Cloud Build
-  - Identity and Access Management
-
-## Step 3: Create Infrastructure for Docker Images
-- Creates Artifact Registry repository for storing Docker images
-- Sets up configuration directories and permissions
-
-## Step 4: Deploy Vector Search Infrastructure
-- Sets up Terraform workspace using the deployment ID
-- Creates and configures `terraform.tfvars` based on config settings
-- Initializes Terraform
-- Applies Terraform configuration specifically for Vector Search components
-- Extracts configuration values from deployed Vector Search resources
-
-## Step 5: Build and Push Docker Image
-- Builds a Docker image with the load testing code and configuration
-- Pushes the image to Artifact Registry
-
-## Step 6: Deploy GKE and Load Testing Framework
-- Applies the full Terraform configuration for GKE and Locust
-- Configures kubectl to interact with the newly created cluster
-
-## Step 7: Configure Access to the Locust UI
-- Creates appropriate Kubernetes service based on user preference for external IP
-- For external IP:
-  - Creates a LoadBalancer service
-  - Waits for external IP assignment
-  - Displays the URL for accessing the Locust UI
-- For internal access:
-  - Provides SSH command for port forwarding
-
+It uses [locust.io](https://locust.io/) an open source frame work to easily load test web tools and get results.
 ## Prerequisites
 
 - Google Cloud account with billing enabled
@@ -64,7 +19,9 @@ The deployment script automates the following process:
   - Create Artifact Registry repositories
   - Deploy resources via Terraform
 
-## Setup
+## Quick start
+
+## Step 1
 
 1. Clone this repository to your local machine
 2. Copy the configuration template to create your config file:
@@ -112,7 +69,7 @@ EMBEDDING_PATH="path/to/embeddings"  # Path to embeddings within bucket
 | `DEPLOYED_INDEX_DEDICATED_MIN_REPLICAS` | Minimum number of replicas | `1` |
 | `DEPLOYED_INDEX_DEDICATED_MAX_REPLICAS` | Maximum number of replicas | `1` |
 
-## Usage
+## Step 2.
 
 1. Make sure your configuration is set correctly in `config.sh`
 2. Run the deployment script:
@@ -127,7 +84,7 @@ EMBEDDING_PATH="path/to/embeddings"  # Path to embeddings within bucket
 5. Access the Locust UI using the provided URL or port forwarding command
 6. Configure and run your load tests through the Locust web interface
 
-## Cleanup
+## Step 3.
 
 To destroy the deployed resources when done:
 
@@ -138,3 +95,6 @@ terraform destroy --auto-approve
 ```
 
 This will remove the GKE cluster, Vector Search resources, and other infrastructure components created by the script.
+
+## N.B.
+The deployment script is for end to end deployment, if required each module can be deployed separately via terraform and the locust file can be manually applied to the deployed GKE cluster. However this is more work.
