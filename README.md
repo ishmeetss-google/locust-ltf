@@ -1,109 +1,140 @@
-# Setting Up Distributed Load Testing with Locust on Google Cloud Platform
+# Vector Search Load Testing Framework
 
-This guide demonstrates how to set up a distributed load testing environment using Locust on Google Kubernetes Engine (GKE). We'll create a Docker repository, build and deploy a Locust container, set up a GKE cluster, and configure networking for accessing the Locust web interface. This setup enables scalable performance testing of your applications.
+This repository contains tools to deploy and run load tests against Google Cloud's Vector Search service. The framework sets up a Locust-based load testing environment in Google Kubernetes Engine (GKE) that can be used to measure performance and scalability of Vector Search deployments.
 
-## Step 1: Create Docker Repository
-Create an Artifact Registry repository to store our Locust Docker images.
+## Overview
+
+The deployment script automates the following process:
+
+## Step 1: Initial Setup and Configuration
+- Verifies the existence of a configuration file
+- Loads settings from `config.sh`
+- Generates dynamic variables including timestamps and Docker image names
+- Displays configuration summary for verification
+- Prompts for user confirmation to proceed
+
+## Step 2: Enable Required Google Cloud Services
+- Enables necessary APIs:
+  - AI Platform
+  - Artifact Registry
+  - Compute Engine
+  - Autoscaling
+  - Google Kubernetes Engine
+  - IAM Credentials
+  - Cloud Build
+  - Identity and Access Management
+
+## Step 3: Create Infrastructure for Docker Images
+- Creates Artifact Registry repository for storing Docker images
+- Sets up configuration directories and permissions
+
+## Step 4: Deploy Vector Search Infrastructure
+- Sets up Terraform workspace using the deployment ID
+- Creates and configures `terraform.tfvars` based on config settings
+- Initializes Terraform
+- Applies Terraform configuration specifically for Vector Search components
+- Extracts configuration values from deployed Vector Search resources
+
+## Step 5: Build and Push Docker Image
+- Builds a Docker image with the load testing code and configuration
+- Pushes the image to Artifact Registry
+
+## Step 6: Deploy GKE and Load Testing Framework
+- Applies the full Terraform configuration for GKE and Locust
+- Configures kubectl to interact with the newly created cluster
+
+## Step 7: Configure Access to the Locust UI
+- Creates appropriate Kubernetes service based on user preference for external IP
+- For external IP:
+  - Creates a LoadBalancer service
+  - Waits for external IP assignment
+  - Displays the URL for accessing the Locust UI
+- For internal access:
+  - Provides SSH command for port forwarding
+
+## Prerequisites
+
+- Google Cloud account with billing enabled
+- Google Cloud CLI (`gcloud`) installed and configured
+- Terraform installed
+- Docker installed (for local development)
+- Sufficient permissions to:
+  - Create GKE clusters
+  - Create Vector Search resources
+  - Create Artifact Registry repositories
+  - Deploy resources via Terraform
+
+## Setup
+
+1. Clone this repository to your local machine
+2. Copy the configuration template to create your config file:
+   ```bash
+   cp config.template.sh config.sh
+   ```
+3. Edit `config.sh` with your specific configuration values
+
+### Configuration Options
+
+#### Required Configuration
+
+| Parameter | Description |
+|-----------|-------------|
+| `PROJECT_ID` | Your Google Cloud project ID |
+| `REGION` | Google Cloud region for resources |
+| `ZONE` | Google Cloud zone for resources |
+| `INDEX_DIMENSIONS` | Number of dimensions for vector embeddings |
+| `DEPLOYMENT_ID` | Unique identifier for this deployment (used for Terraform workspace) |
+
+#### Vector Search Index Options
+
+You can either use an existing Vector Search index or create a new one:
+
+**Option 1: Use Existing Index**
 ```bash
-gcloud artifacts repositories create locust-docker-repo --repository-format=docker --location=<region-name> --description="Docker repository for the locust load testing" --project=<project-name>
+VECTOR_SEARCH_INDEX_ID="projects/PROJECT_ID/locations/REGION/indexes/INDEX_ID"
 ```
 
-## Step 2: Build and Submit Docker Image
-Build and push the Locust Docker image to our repository.
+**Option 2: Create New Index**
 ```bash
-gcloud builds submit --tag <region-name>-docker.pkg.dev/<project-name>/locust-docker-repo/locust-image:LTF
+VECTOR_SEARCH_INDEX_ID=""  # Leave empty
+BUCKET_NAME="your-bucket-name"  # GCS bucket containing embedding data
+EMBEDDING_PATH="path/to/embeddings"  # Path to embeddings within bucket
 ```
 
-## Step 3: Verify Project Configuration
-Check project details to ensure proper setup and access.
+#### Deployment Options
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `ENDPOINT_PUBLIC_ENDPOINT_ENABLED` | Whether to create a public endpoint | `true` |
+| `INDEX_SHARD_SIZE` | Size of index shards | `"SHARD_SIZE_LARGE"` |
+| `DEPLOYED_INDEX_RESOURCE_TYPE` | Resource allocation type | `"dedicated"` |
+| `DEPLOYED_INDEX_DEDICATED_MACHINE_TYPE` | Machine type for dedicated deployments | `"n1-standard-32"` |
+| `DEPLOYED_INDEX_DEDICATED_MIN_REPLICAS` | Minimum number of replicas | `1` |
+| `DEPLOYED_INDEX_DEDICATED_MAX_REPLICAS` | Maximum number of replicas | `1` |
+
+## Usage
+
+1. Make sure your configuration is set correctly in `config.sh`
+2. Run the deployment script:
+   ```bash
+   chmod +x deploy.sh
+   ./deploy.sh
+   ```
+3. Follow the prompts during deployment
+4. When asked about external IP, choose based on your needs:
+   - `y`: Creates a LoadBalancer service with an external IP (accessible from anywhere)
+   - `n`: Sets up access via port forwarding (more secure)
+5. Access the Locust UI using the provided URL or port forwarding command
+6. Configure and run your load tests through the Locust web interface
+
+## Cleanup
+
+To destroy the deployed resources when done:
+
 ```bash
-gcloud projects describe <project-name>
+cd terraform
+terraform workspace select <your-deployment-id>
+terraform destroy --auto-approve
 ```
 
-## Step 4: Check Available IAM Roles
-Verify available Artifact Registry roles for proper permissions management.
-```bash
-gcloud iam roles list | grep artifactregistry
-```
-
-## Step 5: Enable Container Services
-Enable the Container API for GKE cluster creation.
-```bash
-gcloud services enable container.googleapis.com
-```
-
-## Step 6: Create GKE Cluster
-Set up a distributed GKE cluster for running Locust tests.
-```bash
-gcloud container clusters create ishmeetss-locust \
-  --project email2podcast \
-  --service-account ishmeetss-locust-fin@email2podcast.iam.gserviceaccount.com \
-  --region us-central1 \
-  --node-locations us-central1-a,us-central1-b,us-central1-c \
-  --machine-type e2-standard-4 \
-  --num-nodes 3
-```
-
-## Step 7: Configure IAM Policies
-Export service account IAM policies for review and management.
-```bash
-gcloud iam service-accounts get-iam-policy ishmeetss-locust-fin@email2podcast.iam.gserviceaccount.com --format json > ~/policy.json
-```
-
-## Step 8: Install Required Tools
-Install necessary tools for cluster management.
-```bash
-gcloud components install gke-gcloud-auth-plugin
-sudo apt-get install google-cloud-cli-gke-gcloud-auth-plugin
-sudo apt-get install kubectl
-```
-
-## Step 9: Configure Cluster Access
-Set up authentication for the GKE cluster.
-```bash
-gcloud container clusters get-credentials ltf-autopilot-cluster --location us-central1
-```
-
-## Step 10: Scale Cluster
-Increase the number of nodes for higher load testing capacity.
-```bash
-gcloud container clusters resize ishmeetss-locust --location us-central1 --num-nodes=10
-```
-
-## Step 11: Deploy Locust
-Apply the Locust configuration to the cluster.
-```bash
-/google/src/cloud/ishmeetss/ishmeetss/google3/experimental/users/ishmeetss/locust/kustomize build manifests/ |kubectl apply -f -
-```
-
-## Step 12: Set Up Load Balancer
-Configure load balancer access for the Locust web interface.
-```bash
-export INTERNAL_LB_IP=$(kubectl get svc locust-master-web \
-  -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
-```
-
-## Step 13: Create Nginx Proxy
-Set up an Nginx proxy for accessing the Locust interface.
-```bash
-gcloud compute instances create-with-container locust-nginx-proxy-ishmeetss-fin \
-  --project email2podcast \
-  --zone us-central1-a \
-  --container-image gcr.io/cloud-marketplace/google/nginx1:latest \
-  --container-mount-host-path=host-path=/tmp/server.conf,mount-path=/etc/nginx/conf.d/default.conf \
-  --metadata=startup-script="#! /bin/bash
-    cat <<EOF  > /tmp/server.conf
-    server {
-        listen 8089;
-        location / {
-            proxy_pass http://${INTERNAL_LB_IP}:8089;
-        }
-    }
-EOF"
-```
-
-## Step 14: Configure Port Forwarding
-Set up local port forwarding to access the Locust web interface.
-```bash
-gcloud compute ssh locust-nginx-proxy-ishmeetss-fin --project email2podcast --zone us-central1-a -- -NL 8089:localhost:8089
-```
+This will remove the GKE cluster, Vector Search resources, and other infrastructure components created by the script.

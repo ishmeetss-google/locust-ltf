@@ -7,9 +7,10 @@ resource "time_static" "deployment_start" {
   triggers = {
     # This will be updated whenever any of the vector search resources change
     vector_search_config = jsonencode({
-      index_id    = var.vector_search_index_id
-      endpoint_id = var.endpoint_display_name
-      deployed_id = var.deployed_index_id
+      index_id        = var.vector_search_index_id
+      endpoint_id     = var.endpoint_display_name
+      deployed_id     = var.deployed_index_id
+      deployment_id   = var.deployment_id
     })
   }
 }
@@ -21,7 +22,7 @@ resource "google_vertex_ai_index" "vector_index" {
   project      = var.project_id
   count        = var.vector_search_index_id == null ? 1 : 0
   region       = var.region
-  display_name = var.index_display_name
+  display_name = "${var.index_display_name}-${var.deployment_id}"
   description  = var.index_description
   labels       = var.index_labels
 
@@ -77,7 +78,7 @@ locals {
 resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
   project                 = var.project_id
   region                  = var.region
-  display_name            = var.endpoint_display_name
+  display_name            = "${var.endpoint_display_name}-${var.deployment_id}"
   description             = var.endpoint_description
   labels                  = var.endpoint_labels
   public_endpoint_enabled = var.endpoint_public_endpoint_enabled
@@ -102,16 +103,12 @@ resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
 # Vertex AI Deployed Index Resource (Deploy Index to Endpoint)
 # -----------------------------------------------------------------------------
 
-resource "random_id" "suffix" {
-  byte_length = 4
-}
-
 resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index" {
   depends_on     = [google_vertex_ai_index_endpoint.vector_index_endpoint]
   index_endpoint = google_vertex_ai_index_endpoint.vector_index_endpoint.id
   index          = local.index_id
-  # Simplified deployed_index_id using random suffix
-  deployed_index_id = "${var.deployed_index_id}_${random_id.suffix.hex}"
+  # Simplified deployed_index_id using standardized deployment_id
+  deployed_index_id = "${var.deployed_index_id}_${var.deployment_id}"
 
   # Rest of the configuration remains the same
   dynamic "dedicated_resources" {

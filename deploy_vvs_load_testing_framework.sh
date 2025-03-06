@@ -28,6 +28,9 @@ echo "Timestamp: $TIMESTAMP"
 echo "Docker Image: $DOCKER_IMAGE"
 echo "Index Dimensions: $INDEX_DIMENSIONS"
 echo "Project Number: $PROJECT_NUMBER"
+echo "Deployment ID: $DEPLOYMENT_ID"
+echo "==================================="
+
 if [[ -n "$VECTOR_SEARCH_INDEX_ID" ]]; then
   echo "Using existing Vector Search index: $VECTOR_SEARCH_INDEX_ID"
 else
@@ -71,15 +74,32 @@ chmod 666 ./public_http_query.py
 chmod 666 config/locust_config.env
 
 # Phase 1: Deploy Vector Search infrastructure first
-echo "Deploying Vector Search infrastructure..."
+echo "Deploying Vector Search infrastructure, this can take a while..."
 cd terraform
+
+# Check if the workspace exists using `terraform workspace list | grep`
+if terraform workspace list | grep -q "$DEPLOYMENT_ID"; then
+  # Workspace exists, switch to it
+  echo "Workspace '$DEPLOYMENT_ID' already exists. Switching to it..."
+  terraform workspace select "$DEPLOYMENT_ID"
+else
+  # Workspace doesn't exist, create it
+  echo "Workspace '$DEPLOYMENT_ID' does not exist. Creating it..."
+  terraform workspace new "$DEPLOYMENT_ID"
+fi
+
+# Optional: Verify the current workspace after switching/creating
+current_workspace=$(terraform workspace show)
+echo "Current Terraform workspace: $current_workspace"
+
+terraform workspace select $DEPLOYMENT_ID
 
 # Create or update terraform.tfvars with appropriate settings
 cat <<EOF > terraform.tfvars
 project_id     = "${PROJECT_ID}"
 region         = "${REGION}"
 project_number = "${PROJECT_NUMBER}"
-
+deployment_id  = "${DEPLOYMENT_ID}"
 EOF
 
 # Check if we're using an existing index or need to create a new one
@@ -133,9 +153,14 @@ EOF
 [[ -n "$DEPLOYED_INDEX_UPDATE_TIMEOUT" ]] && echo "deployed_index_update_timeout = \"$DEPLOYED_INDEX_UPDATE_TIMEOUT\"" >> terraform.tfvars
 [[ -n "$DEPLOYED_INDEX_DELETE_TIMEOUT" ]] && echo "deployed_index_delete_timeout = \"$DEPLOYED_INDEX_DELETE_TIMEOUT\"" >> terraform.tfvars
 
+cat terraform.tfvars
+
 # Initialize and apply just the vector search module
 terraform init
-terraform apply -target=module.vector_search -auto-approve
+
+echo "Deploying vector search in the Terraform workspace: $DEPLOYMENT_ID"
+terraform apply -target=module.vector_search --auto-approve
+
 
 # Extract crucial values from Terraform output
 echo "Extracting Vector Search configuration..."
@@ -164,12 +189,27 @@ gcloud builds submit --project=${PROJECT_ID} --tag ${DOCKER_IMAGE}
 echo "Deploying remaining infrastructure..."
 cd terraform
 
+terraform workspace select $DEPLOYMENT_ID
+
+echo "Deploying in the Terraform workspace: $DEPLOYMENT_ID"
+
 # Apply the full infrastructure
-terraform apply -auto-approve
+terraform apply --auto-approve
+
+
+DEPLOYED_CLUSTER_SVC=$(terraform output -raw locust_master_svc_name)
+DEPLOYED_CLUSTER_MAIN_NODE=$(terraform output -raw locust_master_node_name)
+DEPLOYED_CLUSTER_NAME=$(terraform output -raw gke_cluster_name)
+NGINX_PROXY_NAME=$(terraform output -raw nginx_proxy_name)
+
+echo $DEPLOYED_CLUSTER_MAIN_NODE
+echo $DEPLOYED_CLUSTER_SVC
+echo $DEPLOYED_CLUSTER_NAME
+echo $NGINX_PROXY_NAME
 
 # Configure kubectl
 echo "Configuring kubectl..."
-gcloud container clusters get-credentials ltf-autopilot-cluster --project=${PROJECT_ID} --location=${REGION}
+gcloud container clusters get-credentials $DEPLOYED_CLUSTER_NAME --project=${PROJECT_ID} --location=${REGION}
 
 echo "==================================="
 echo "Deployment Complete!"
@@ -177,12 +217,12 @@ echo "==================================="
 
 # Setup access
 if [[ "${need_external_ip,,}" =~ ^(y|yes)$ ]]; then
-    kubectl delete svc locust-master-web
+    kubectl delete svc ${DEPLOYED_CLUSTER_SVC} 
     kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Service
 metadata:
-  name: locust-master-web
+  name: ${DEPLOYED_CLUSTER_SVC}
 spec:
   type: LoadBalancer
   ports:
@@ -190,12 +230,12 @@ spec:
     targetPort: 8089
     name: web-ui
   selector:
-    app: locust-master
+    app: ${DEPLOYED_CLUSTER_MAIN_NODE}
 EOF
 # Wait for the external IP to be assigned
 echo "Waiting for external IP to be assigned..."
 while true; do
-  EXTERNAL_IP=$(kubectl get svc locust-master-web -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  EXTERNAL_IP=$(kubectl get svc ${DEPLOYED_CLUSTER_SVC} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
   if [ -n "$EXTERNAL_IP" ]; then
     break
   fi
@@ -204,13 +244,13 @@ while true; do
 done
 
 # Display the service information
-kubectl get svc locust-master-web
+kubectl get svc ${DEPLOYED_CLUSTER_SVC}
 
 # Print the access URL with the actual IP
 echo "Access Locust UI at http://$EXTERNAL_IP:8089"
 else
     echo "Access Locust UI by running:"
-    echo "gcloud compute ssh ltf-nginx-proxy --project ${PROJECT_ID} --zone ${ZONE} -- -NL 8089:localhost:8089"
+    echo "gcloud compute ssh ${NGINX_PROXY_NAME} --project ${PROJECT_ID} --zone ${ZONE} -- -NL 8089:localhost:8089"
     echo "Then open http://localhost:8089 in your browser"
 fi
 

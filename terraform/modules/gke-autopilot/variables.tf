@@ -18,3 +18,8 @@ variable "image" {
     type = string
     description = "Load testing image name."
 }
+
+variable "deployment_id" {
+  type        = string
+  description = "Unique identifier for this deployment"
+}

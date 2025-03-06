@@ -55,6 +55,7 @@ module "vector_search" {
   deployed_index_create_timeout                   = var.deployed_index_create_timeout
   deployed_index_update_timeout                   = var.deployed_index_update_timeout
   deployed_index_delete_timeout                   = var.deployed_index_delete_timeout
+  deployment_id                                   = var.deployment_id
 }
 
 module "gke_autopilot" {
@@ -63,13 +64,14 @@ module "gke_autopilot" {
   project_id                               = var.project_id
   region                                   = var.region
   project_number                           = var.project_number
+  deployment_id                                   = var.deployment_id
   image                                    = var.image
 }
 
 # Add this to your main.tf file after the modules
 
 resource "google_compute_instance" "nginx_proxy" {
-  name         = "ltf-nginx-proxy"
+  name         = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-ltf-nginx-proxy"
   machine_type = "e2-micro"  # Choose an appropriate machine type
   zone         = "${var.region}-a"  # Adjust as needed
   project      = var.project_id  # Add this line to specify the project

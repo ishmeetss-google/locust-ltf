@@ -9,8 +9,8 @@ terraform {
 
 # Create the service account if it doesn't exist
 resource "google_service_account" "service_account" {
-  account_id   = "ltf-service-account"
-  display_name = "ltf-service-account"
+  account_id   = "${local.resource_prefix}-ltf-sa"
+  display_name = "${local.resource_prefix}-ltf-sa"
   project      = var.project_id
   
   # This will make Terraform try to create the service account if it doesn't exist
@@ -39,7 +39,7 @@ resource "google_project_iam_binding" "container_default_node_service_account_bi
 }
 
 resource "google_container_cluster" "ltf_autopilot_cluster" {
-  name                = "ltf-autopilot-cluster"
+  name                = "${local.resource_prefix}-ltf-autopilot-cluster"
   project             = var.project_id
   location            = var.region
   enable_autopilot    = true

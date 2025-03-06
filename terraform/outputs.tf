@@ -48,3 +48,23 @@ output "vector_search_deployed_index_endpoint_host" {
 output "locust_ui_access_instructions" {
   value = "Run: gcloud compute ssh ${google_compute_instance.nginx_proxy.name} --project ${var.project_id} --zone ${google_compute_instance.nginx_proxy.zone} -- -NL 8089:localhost:8089\nThen open http://localhost:8089 in your browser"
 }
+
+output "locust_master_svc_name" {
+  description = "The name of the Locust master service"
+  value       = module.gke_autopilot.locust_master_svc_name
+}
+
+output "locust_master_node_name" {
+  description = "The name of the Locust master node"
+  value       = module.gke_autopilot.locust_master_node_name
+}
+
+output "nginx_proxy_name" {
+  description = "The name of the Nginx Proxy"
+  value       = google_compute_instance.nginx_proxy.name
+}
+
+output "gke_cluster_name" {
+  description = "The name of the deployed GKE cluster"
+  value       = module.gke_autopilot.gke_cluster_name
+}

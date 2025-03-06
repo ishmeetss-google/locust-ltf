@@ -272,3 +272,8 @@ variable "region" {
   type        = string
   description = "The Google Cloud region where resources will be created."
 }
+
+variable "deployment_id" {
+  type        = string
+  description = "Unique identifier for this deployment"
+}

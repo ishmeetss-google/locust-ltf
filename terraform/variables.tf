@@ -289,3 +289,8 @@ variable "image" {
   description = "Load testing image name."
   # No Default - User must provide the image for the locust load testing code.  
 }
+
+variable "deployment_id" {
+  type        = string
+  description = "Unique identifier for this deployment"
+}

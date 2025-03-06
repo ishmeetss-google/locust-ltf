@@ -11,6 +11,10 @@ provider "kubernetes" {
   ]
 }
 
+locals {
+  resource_prefix = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}"
+}
+
 # First binding - just for the GCP service account
 resource "google_project_iam_binding" "aiplatform_viewer_binding" {
   project = var.project_id
@@ -34,7 +38,7 @@ resource "google_project_iam_member" "aiplatform_viewer_k8s_binding" {
 }
 resource "kubernetes_config_map" "locust_config" {
   metadata {
-    name = "locust-config"
+    name = "${local.resource_prefix}-config"
   }
 
   data = {
@@ -44,24 +48,24 @@ resource "kubernetes_config_map" "locust_config" {
 
 resource "kubernetes_deployment" "locust_master" {
   metadata {
-    name = "locust-master"
+    name = "${local.resource_prefix}-master"
   }
   spec {
     selector {
       match_labels = {
-        app = "locust-master"
+        app = "${local.resource_prefix}-master"
       }
     }
     template {
       metadata {
         labels = {
-          app = "locust-master"
+          app = "${local.resource_prefix}-master"
         }
       }
       spec {
         automount_service_account_token = true
           volume {
-            name = "locust-config"
+            name = "${local.resource_prefix}-config"
             config_map {
               name = kubernetes_config_map.locust_config.metadata[0].name
               default_mode = "0644"
@@ -71,7 +75,7 @@ resource "kubernetes_deployment" "locust_master" {
           image = var.image
           name  = "locust-master"
           volume_mount {
-            name       = "locust-config"
+            name       = "${local.resource_prefix}-config"
             mount_path = "/tasks/locust_config.env"
             sub_path   = "locust_config.env"
           }
@@ -96,25 +100,25 @@ resource "kubernetes_deployment" "locust_master" {
 
 resource "kubernetes_deployment" "locust_worker" {
   metadata {
-    name = "locust-worker"
+    name = "${local.resource_prefix}-worker"
   }
   spec {
     selector {
       match_labels = {
-        app = "locust-worker"
+        app = "${local.resource_prefix}-worker"
       }
     }
     template {
       metadata {
         labels = {
-          app = "locust-worker"
+          app = "${local.resource_prefix}-worker"
         }
       }
       spec {
         automount_service_account_token = true
 
         volume {
-            name = "locust-config"
+            name = "${local.resource_prefix}-config"
             config_map {
               name = kubernetes_config_map.locust_config.metadata[0].name
               default_mode = "0644"
@@ -124,11 +128,11 @@ resource "kubernetes_deployment" "locust_worker" {
           image = var.image
           name  = "locust-worker"
           volume_mount {
-            name       = "locust-config"
+            name       = "${local.resource_prefix}-config"
             mount_path = "/tasks/locust_config.env"
             sub_path   = "locust_config.env"
           }
-          args  = ["-f", "/tasks/public_http_query.py", "--worker", "--master-host", "locust-master"]
+          args  = ["-f", "/tasks/public_http_query.py", "--worker", "--master-host", "${local.resource_prefix}-master"]
           resources {
             requests = {
               cpu = "1000m"
@@ -142,14 +146,14 @@ resource "kubernetes_deployment" "locust_worker" {
 
 resource "kubernetes_service" "locust_master" {
   metadata {
-    name = "locust-master"
+    name = "${local.resource_prefix}-master"
     labels = {
-      app = "locust-master"
+      app = "${local.resource_prefix}-master"
     }
   }
   spec {
     selector = {
-      app = "locust-master"
+      app = "${local.resource_prefix}-master"
     }
     port {
       port = 8089
@@ -171,17 +175,17 @@ resource "kubernetes_service" "locust_master" {
 
 resource "kubernetes_service" "locust_master_web" {
   metadata {
-    name = "locust-master-web"
+    name = "${local.resource_prefix}-master-web"
     annotations = {
       "networking.gke.io/load-balancer-type" = "Internal"
     }
     labels = {
-      app = "locust-master"
+      app = "${local.resource_prefix}-master"
     }
   }
   spec {
     selector = {
-      app = "locust-master"
+      app = "${local.resource_prefix}-master"
     }
     port {
       port        = 8089
@@ -194,7 +198,7 @@ resource "kubernetes_service" "locust_master_web" {
 
 resource "kubernetes_horizontal_pod_autoscaler" "locust_worker_autoscaler" {
   metadata {
-    name = "locust-worker-autoscaler"
+    name = "${local.resource_prefix}-worker-autoscaler"
   }
 
   spec {
@@ -204,7 +208,7 @@ resource "kubernetes_horizontal_pod_autoscaler" "locust_worker_autoscaler" {
     scale_target_ref {
       api_version = "apps/v1"
       kind = "Deployment"
-      name = "locust-worker"
+      name = "${local.resource_prefix}-worker"
     }
     target_cpu_utilization_percentage = 50
   }
