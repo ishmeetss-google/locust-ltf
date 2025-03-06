@@ -27,7 +27,7 @@ variable "index_display_name" {
 variable "index_shard_size" {
   type        = string
   description = "Shard size for the Vector Search index (SHARD_SIZE_SMALL, SHARD_SIZE_MEDIUM, SHARD_SIZE_LARGE)"
-  default     = "SHARD_SIZE_MEDIUM"  
+  default     = "SHARD_SIZE_MEDIUM"
   validation {
     condition     = contains(["SHARD_SIZE_SMALL", "SHARD_SIZE_MEDIUM", "SHARD_SIZE_LARGE"], var.index_shard_size)
     error_message = "Invalid value for shard_size. Must be one of: SHARD_SIZE_SMALL, SHARD_SIZE_MEDIUM, SHARD_SIZE_LARGE."
@@ -260,6 +260,40 @@ variable "deployed_index_delete_timeout" {
   type        = string
   description = "Timeout duration for deployed index deletion."
   default     = "4h"
+}
+
+# -----------------------------------------------------------------------------
+# Additional PSC Variables 
+# -----------------------------------------------------------------------------
+variable "enable_access_logging" {
+  description = "Whether to enable access logging for the private endpoint"
+  type        = bool
+  default     = false
+}
+
+variable "deployment_group" {
+  description = "Deployment group for the index (optional, useful for multiple peering ranges)"
+  type        = string
+  default     = "default"
+}
+
+# Authentication config (optional)
+variable "deployed_index_auth_enabled" {
+  description = "Whether to enable authentication for the deployed index"
+  type        = bool
+  default     = false
+}
+
+variable "deployed_index_auth_audiences" {
+  description = "List of JWT audiences that are allowed to access"
+  type        = list(string)
+  default     = []
+}
+
+variable "deployed_index_auth_allowed_issuers" {
+  description = "List of allowed JWT issuers (service accounts in format: service-account-name@project-id.iam.gserviceaccount.com)"
+  type        = list(string)
+  default     = []
 }
 
 # Passed from the root

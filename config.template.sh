@@ -19,10 +19,10 @@ EMBEDDING_PATH="your-embedding-folder"
 
 #Endpoint configuration settings
 ENDPOINT_PUBLIC_ENDPOINT_ENABLED=true
+ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT=false  # Set to true to enable PSC
 
 # Optional Deployed Index configuration settings
-DEPLOYED_INDEX_RESOURCE_TYPE="dedicated "  # Options: automatic, dedicated
-
+DEPLOYED_INDEX_RESOURCE_TYPE="dedicated"  # Options: automatic, dedicated
 
 # Optional Vector Search Index configuration settings
 # INDEX_DISPLAY_NAME="my-vector-search-index"
@@ -59,3 +59,11 @@ DEPLOYED_INDEX_RESOURCE_TYPE="dedicated "  # Options: automatic, dedicated
 # DEPLOYED_INDEX_CREATE_TIMEOUT="60m"
 # DEPLOYED_INDEX_UPDATE_TIMEOUT="60m"
 # DEPLOYED_INDEX_DELETE_TIMEOUT="60m"
+
+# GKE and PSC Network Configuration
+# PSC_NETWORK_NAME="vertex-psc-network"     # Network name to use for PSC
+# SUBNETWORK=""                             # Format: projects/{project}/regions/{region}/subnetworks/{subnetwork}
+# USE_PRIVATE_ENDPOINT=false                # Whether to use a private endpoint for GKE
+# MASTER_IPV4_CIDR_BLOCK="172.16.0.0/28"    # IP range for GKE master
+# GKE_POD_SUBNET_RANGE="10.4.0.0/14"        # IP range for GKE pods
+# GKE_SERVICE_SUBNET_RANGE="10.0.32.0/20"   # IP range for GKE services

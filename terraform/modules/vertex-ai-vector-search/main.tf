@@ -82,12 +82,15 @@ resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
   labels                  = var.endpoint_labels
   public_endpoint_enabled = var.endpoint_public_endpoint_enabled
 
-  network = var.endpoint_network
+  # Only set network if PSC is not enabled
+  network = var.endpoint_enable_private_service_connect ? null : var.endpoint_network
 
+  # Only set private_service_connect_config if PSC is enabled
   dynamic "private_service_connect_config" {
     for_each = var.endpoint_enable_private_service_connect ? [1] : []
     content {
       enable_private_service_connect = true
+      project_allowlist              = [var.project_id]
     }
   }
 
@@ -112,6 +115,21 @@ resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index
   index          = local.index_id
   # Simplified deployed_index_id using random suffix
   deployed_index_id = "${var.deployed_index_id}_${random_id.suffix.hex}"
+
+  # Optional PSC-related configurations
+  enable_access_logging = var.enable_access_logging
+  deployment_group      = var.deployment_group
+
+  # Add authentication config if enabled
+  dynamic "deployed_index_auth_config" {
+    for_each = var.deployed_index_auth_enabled ? [1] : []
+    content {
+      auth_provider {
+        audiences       = var.deployed_index_auth_audiences
+        allowed_issuers = var.deployed_index_auth_allowed_issuers
+      }
+    }
+  }
 
   # Rest of the configuration remains the same
   dynamic "dedicated_resources" {

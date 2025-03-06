@@ -1,34 +1,6 @@
 # -----------------------------------------------------------------------------
 # Outputs - Export important information
 # -----------------------------------------------------------------------------
-# output "index_endpoint_id" {
-#   description = "The ID of the Index Endpoint"
-#   value       = google_vertex_ai_index_endpoint.vector_index_endpoint.id
-# }
-
-# output "index_endpoint_public_endpoint" {
-#   description = "The public endpoint of the Index Endpoint (if enabled)"
-#   value       = google_vertex_ai_index_endpoint.vector_index_endpoint.public_endpoint_domain_name
-#   sensitive   = false # Public endpoint is not considered sensitive, adjust if needed
-# }
-
-# output "deployed_index_id" {
-#   description = "The ID of the Deployed Index"
-#   value       = google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.deployed_index_id
-# }
-
-# # output "index_id" {
-# #   description = "The ID of the Vector Index"
-# #   value       = local.index_id
-# # }
-
-# output "endpoint_public_url" {
-#   description = "The public URL of the endpoint (if enabled)"
-#   value       = var.endpoint_public_endpoint_enabled ? google_vertex_ai_index_endpoint.vector_index_endpoint.public_endpoint_domain_name : null
-# }
-
-# terraform/outputs.tf
-
 output "vector_search_deployed_index_endpoint_id" {
   value       = module.vector_search.deployed_index_id
   description = "Vector Search Deployed Index Resource ID"
@@ -42,6 +14,34 @@ output "vector_search_index_endpoint_id" {
 output "vector_search_deployed_index_endpoint_host" {
   value       = module.vector_search.index_endpoint_public_endpoint
   description = "Vector Search Index REST Endpoint (Domain Name)"
+}
+
+# -----------------------------------------------------------------------------
+# PSC-related outputs
+# -----------------------------------------------------------------------------
+output "vector_search_private_endpoints" {
+  value       = module.vector_search.private_endpoints
+  description = "Raw private endpoints information for the deployed index (PSC)"
+}
+
+output "vector_search_service_attachment" {
+  value       = module.vector_search.service_attachment
+  description = "The service attachment URI for PSC forwarding rule creation"
+}
+
+output "vector_search_match_grpc_address" {
+  value       = module.vector_search.match_grpc_address
+  description = "The private gRPC address for sending match requests"
+}
+
+output "vector_search_psc_automated_endpoints" {
+  value       = module.vector_search.psc_automated_endpoints
+  description = "PSC automated endpoints information (populated after PSC automation)"
+}
+
+output "vector_search_psc_enabled" {
+  value       = module.vector_search.psc_enabled
+  description = "Whether PSC is enabled for the endpoint"
 }
 
 # Add an output for the proxy access instructions

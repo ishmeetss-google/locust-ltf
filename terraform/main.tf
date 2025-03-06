@@ -60,10 +60,27 @@ module "vector_search" {
 module "gke_autopilot" {
   source = "./modules/gke-autopilot"
 
-  project_id                               = var.project_id
-  region                                   = var.region
-  project_number                           = var.project_number
-  image                                    = var.image
+  project_id         = var.project_id
+  region             = var.region
+  project_number     = var.project_number
+  image              = var.image
+  
+  # Pass network configuration for PSC support if enabled
+  network            = var.endpoint_enable_private_service_connect ? (
+                         var.endpoint_network != "" ? var.endpoint_network : 
+                         "projects/${var.project_id}/global/networks/${var.psc_network_name}"
+                       ) : ""
+                       
+  subnetwork         = var.subnetwork
+  enable_psc_support = var.endpoint_enable_private_service_connect
+  
+  # Optional: Configure private endpoint settings
+  use_private_endpoint   = var.use_private_endpoint
+  master_ipv4_cidr_block = var.master_ipv4_cidr_block
+  
+  # IP ranges for GKE
+  gke_pod_subnet_range     = var.gke_pod_subnet_range
+  gke_service_subnet_range = var.gke_service_subnet_range
 }
 
 # Add this to your main.tf file after the modules

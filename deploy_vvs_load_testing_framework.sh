@@ -133,6 +133,24 @@ EOF
 [[ -n "$DEPLOYED_INDEX_UPDATE_TIMEOUT" ]] && echo "deployed_index_update_timeout = \"$DEPLOYED_INDEX_UPDATE_TIMEOUT\"" >> terraform.tfvars
 [[ -n "$DEPLOYED_INDEX_DELETE_TIMEOUT" ]] && echo "deployed_index_delete_timeout = \"$DEPLOYED_INDEX_DELETE_TIMEOUT\"" >> terraform.tfvars
 
+# Add GKE network configuration if PSC is enabled
+if [[ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" == "true" ]]; then
+  echo "Configuring GKE for PSC support..."
+  
+  # Set up PSC network name if defined
+  [[ -n "$PSC_NETWORK_NAME" ]] && echo "psc_network_name = \"$PSC_NETWORK_NAME\"" >> terraform.tfvars
+
+  # Add GKE subnet configuration
+  [[ -n "$SUBNETWORK" ]] && echo "subnetwork = \"$SUBNETWORK\"" >> terraform.tfvars
+  [[ -n "$USE_PRIVATE_ENDPOINT" ]] && echo "use_private_endpoint = $USE_PRIVATE_ENDPOINT" >> terraform.tfvars
+  [[ -n "$MASTER_IPV4_CIDR_BLOCK" ]] && echo "master_ipv4_cidr_block = \"$MASTER_IPV4_CIDR_BLOCK\"" >> terraform.tfvars
+    
+  # Add IP ranges for GKE
+  [[ -n "$GKE_POD_SUBNET_RANGE" ]] && echo "gke_pod_subnet_range = \"$GKE_POD_SUBNET_RANGE\"" >> terraform.tfvars
+  [[ -n "$GKE_SERVICE_SUBNET_RANGE" ]] && echo "gke_service_subnet_range = \"$GKE_SERVICE_SUBNET_RANGE\"" >> terraform.tfvars
+fi
+
+
 # Initialize and apply just the vector search module
 terraform init
 terraform apply -target=module.vector_search -auto-approve
@@ -144,6 +162,7 @@ export VS_DEPLOYED_INDEX_ID=$(terraform output -raw vector_search_deployed_index
 export VS_INDEX_ENDPOINT_ID=$(terraform output -raw vector_search_index_endpoint_id)
 export VS_ENDPOINT_HOST=$(terraform output -raw vector_search_deployed_index_endpoint_host)
 
+
 # Save these to a temporary file for Docker build
 cd ..
 cat <<EOF > config/locust_config.env
@@ -153,6 +172,23 @@ INDEX_ENDPOINT_ID=${VS_INDEX_ENDPOINT_ID}
 ENDPOINT_HOST=${VS_ENDPOINT_HOST}
 PROJECT_ID=${PROJECT_ID}
 EOF
+
+# Extract PSC-specific values if PSC is enabled
+if [[ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" == "true" ]]; then
+  echo "Extracting PSC configuration..."
+  cd terraform
+  export VS_PSC_ENABLED=true
+  export VS_SERVICE_ATTACHMENT=$(terraform output -raw vector_search_service_attachment)
+  export VS_MATCH_GRPC_ADDRESS=$(terraform output -raw vector_search_match_grpc_address)
+  cd ..
+  
+  # Add PSC configuration to locust_config.env
+  echo "PSC_ENABLED=true" >> config/locust_config.env
+  echo "SERVICE_ATTACHMENT=${VS_SERVICE_ATTACHMENT}" >> config/locust_config.env
+  echo "MATCH_GRPC_ADDRESS=${VS_MATCH_GRPC_ADDRESS}" >> config/locust_config.env
+else
+  echo "PSC_ENABLED=false" >> config/locust_config.env
+fi
 
 # Phase 2: Build and push Docker image with the config
 echo "Building and pushing Docker image..."

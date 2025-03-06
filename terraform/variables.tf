@@ -137,7 +137,7 @@ variable "index_update_method" {
 variable "index_create_timeout" {
   type        = string
   description = "Timeout duration for index creation."
-  default     = "2h"
+  default     = "6h"
 }
 
 variable "index_update_timeout" {
@@ -288,4 +288,41 @@ variable "image" {
   type        = string
   description = "Load testing image name."
   # No Default - User must provide the image for the locust load testing code.  
+}
+
+# Additional variables for GKE network configuration
+variable "subnetwork" {
+  description = "The subnetwork to host the GKE cluster in (format: projects/{project}/regions/{region}/subnetworks/{subnetwork})"
+  type        = string
+  default     = ""
+}
+
+variable "use_private_endpoint" {
+  description = "Whether the master's internal IP address is used as the cluster endpoint"
+  type        = bool
+  default     = false
+}
+
+variable "master_ipv4_cidr_block" {
+  description = "The IP range in CIDR notation to use for the hosted master network"
+  type        = string
+  default     = "172.16.0.0/28"
+}
+
+variable "psc_network_name" {
+  description = "The name of the network to use for PSC (used when endpoint_network is not specified)"
+  type        = string
+  default     = "vertex-psc-network"
+}
+
+variable "gke_pod_subnet_range" {
+  description = "IP address range for GKE pods in CIDR notation"
+  type        = string
+  default     = "10.4.0.0/14"
+}
+
+variable "gke_service_subnet_range" {
+  description = "IP address range for GKE services in CIDR notation"
+  type        = string
+  default     = "10.0.32.0/20" 
 }
