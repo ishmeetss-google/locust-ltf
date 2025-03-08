@@ -26,7 +26,7 @@ resource "google_project_iam_member" "aiplatform_viewer_k8s_binding" {
   project = var.project_id
   role    = "roles/aiplatform.viewer"
   member  = "principal://iam.googleapis.com/projects/${var.project_number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/default/sa/default"
-  
+
   depends_on = [
     google_container_cluster.ltf_autopilot_cluster,
     # Add a time delay or another indicator that the cluster is fully ready
@@ -60,13 +60,13 @@ resource "kubernetes_deployment" "locust_master" {
       }
       spec {
         automount_service_account_token = true
-          volume {
-            name = "locust-config"
-            config_map {
-              name = kubernetes_config_map.locust_config.metadata[0].name
-              default_mode = "0644"
-            }
+        volume {
+          name = "locust-config"
+          config_map {
+            name         = kubernetes_config_map.locust_config.metadata[0].name
+            default_mode = "0644"
           }
+        }
         container {
           image = var.image
           name  = "locust-master"
@@ -75,7 +75,7 @@ resource "kubernetes_deployment" "locust_master" {
             mount_path = "/tasks/locust_config.env"
             sub_path   = "locust_config.env"
           }
-          args  = ["-f", "/tasks/public_http_query.py", "--master", "--class-picker"]
+          args = ["-f", "/tasks/locust.py", "--master", "--class-picker"]
           port {
             container_port = 8089
             name           = "loc-master-web"
@@ -114,12 +114,12 @@ resource "kubernetes_deployment" "locust_worker" {
         automount_service_account_token = true
 
         volume {
-            name = "locust-config"
-            config_map {
-              name = kubernetes_config_map.locust_config.metadata[0].name
-              default_mode = "0644"
-            }
+          name = "locust-config"
+          config_map {
+            name         = kubernetes_config_map.locust_config.metadata[0].name
+            default_mode = "0644"
           }
+        }
         container {
           image = var.image
           name  = "locust-worker"
@@ -128,7 +128,7 @@ resource "kubernetes_deployment" "locust_worker" {
             mount_path = "/tasks/locust_config.env"
             sub_path   = "locust_config.env"
           }
-          args  = ["-f", "/tasks/public_http_query.py", "--worker", "--master-host", "locust-master"]
+          args = ["-f", "/tasks/public_http_query.py", "--worker", "--master-host", "locust-master"]
           resources {
             requests = {
               cpu = "1000m"
@@ -152,19 +152,19 @@ resource "kubernetes_service" "locust_master" {
       app = "locust-master"
     }
     port {
-      port = 8089
+      port        = 8089
       target_port = "loc-master-web"
-      name  = "loc-master-web"
+      name        = "loc-master-web"
     }
     port {
-      port = 5557
+      port        = 5557
       target_port = "loc-master-p1"
-      name  = "loc-master-p1"
+      name        = "loc-master-p1"
     }
     port {
-      port = 5558
+      port        = 5558
       target_port = "loc-master-p2"
-      name  = "loc-master-p2"
+      name        = "loc-master-p2"
     }
   }
 }
@@ -186,7 +186,7 @@ resource "kubernetes_service" "locust_master_web" {
     port {
       port        = 8089
       target_port = "loc-master-web"
-      name = "loc-master-web"
+      name        = "loc-master-web"
     }
     type = "LoadBalancer"
   }
@@ -203,8 +203,8 @@ resource "kubernetes_horizontal_pod_autoscaler" "locust_worker_autoscaler" {
 
     scale_target_ref {
       api_version = "apps/v1"
-      kind = "Deployment"
-      name = "locust-worker"
+      kind        = "Deployment"
+      name        = "locust-worker"
     }
     target_cpu_utilization_percentage = 50
   }

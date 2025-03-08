@@ -1,50 +1,81 @@
+# outputs.tf (Root module)
 # -----------------------------------------------------------------------------
-# Outputs - Export important information
+# Vector Search Service Outputs
 # -----------------------------------------------------------------------------
-output "vector_search_deployed_index_endpoint_id" {
+output "vector_search_index_id" {
+  description = "The ID of the Vector Search index"
+  value       = module.vector_search.index_id
+}
+
+output "vector_search_endpoint_id" {
+  description = "The ID of the Vector Search endpoint"
+  value       = module.vector_search.endpoint_id
+}
+
+output "vector_search_deployed_index_id" {
+  description = "The ID of the deployed Vector Search index"
   value       = module.vector_search.deployed_index_id
-  description = "Vector Search Deployed Index Resource ID"
-}
-
-output "vector_search_index_endpoint_id" {
-  value       = module.vector_search.index_endpoint_id
-  description = "Vector Search Index Public Host (HTTPS)"
-}
-
-output "vector_search_deployed_index_endpoint_host" {
-  value       = module.vector_search.index_endpoint_public_endpoint
-  description = "Vector Search Index REST Endpoint (Domain Name)"
 }
 
 # -----------------------------------------------------------------------------
-# PSC-related outputs
+# Endpoint Access Outputs
 # -----------------------------------------------------------------------------
-output "vector_search_private_endpoints" {
-  value       = module.vector_search.private_endpoints
-  description = "Raw private endpoints information for the deployed index (PSC)"
+output "vector_search_public_endpoint" {
+  description = "The public endpoint domain name (if enabled)"
+  value       = module.vector_search.public_endpoint_domain
+}
+
+# -----------------------------------------------------------------------------
+# PSC Connectivity Outputs
+# -----------------------------------------------------------------------------
+output "vector_search_psc_enabled" {
+  description = "Whether PSC is enabled for the Vector Search endpoint"
+  value       = module.vector_search.psc_enabled
 }
 
 output "vector_search_service_attachment" {
-  value       = module.vector_search.service_attachment
   description = "The service attachment URI for PSC forwarding rule creation"
+  value       = module.vector_search.service_attachment
 }
 
 output "vector_search_match_grpc_address" {
-  value       = module.vector_search.match_grpc_address
   description = "The private gRPC address for sending match requests"
+  value       = module.vector_search.match_grpc_address
 }
 
-output "vector_search_psc_automated_endpoints" {
-  value       = module.vector_search.psc_automated_endpoints
-  description = "PSC automated endpoints information (populated after PSC automation)"
+# Only output PSC address information when PSC is enabled
+output "psc_address_ip" {
+  description = "The IP address allocated for PSC"
+  value       = var.endpoint_enable_private_service_connect && length(google_compute_address.psc_address) > 0 ? google_compute_address.psc_address[0].address : null
 }
 
-output "vector_search_psc_enabled" {
-  value       = module.vector_search.psc_enabled
-  description = "Whether PSC is enabled for the endpoint"
+output "psc_forwarding_rule" {
+  description = "The PSC forwarding rule details" 
+  value       = var.endpoint_enable_private_service_connect ? {
+    name    = google_compute_forwarding_rule.psc_forwarding_rule[0].name
+    ip      = google_compute_address.psc_address[0].address
+    network = google_compute_forwarding_rule.psc_forwarding_rule[0].network
+  } : null
 }
 
-# Add an output for the proxy access instructions
+# -----------------------------------------------------------------------------
+# Access Instructions
+# -----------------------------------------------------------------------------
 output "locust_ui_access_instructions" {
+  description = "Instructions for accessing the Locust UI"
   value = "Run: gcloud compute ssh ${google_compute_instance.nginx_proxy.name} --project ${var.project_id} --zone ${google_compute_instance.nginx_proxy.zone} -- -NL 8089:localhost:8089\nThen open http://localhost:8089 in your browser"
+}
+
+# Combined output for scripting use cases
+output "vector_search_connection_info" {
+  description = "Complete connection information for Vector Search"
+  value = {
+    public_access = var.endpoint_enable_private_service_connect ? false : true
+    public_endpoint = module.vector_search.public_endpoint_domain
+    psc_enabled = module.vector_search.psc_enabled
+    psc_ip_address = var.endpoint_enable_private_service_connect && length(google_compute_address.psc_address) > 0 ? google_compute_address.psc_address[0].address : null
+    match_grpc_address = module.vector_search.match_grpc_address
+    endpoint_id = module.vector_search.endpoint_id
+    deployed_index_id = module.vector_search.deployed_index_id
+  }
 }

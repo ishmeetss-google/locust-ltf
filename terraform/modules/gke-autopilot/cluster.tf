@@ -10,8 +10,8 @@ terraform {
 locals {
   # Determine if we're using a custom network or the default
   using_custom_network = var.network != ""
-  network_name = local.using_custom_network ? var.network : "default"
-  
+  network_name         = local.using_custom_network ? var.network : "default"
+
   # For naming resources
   cluster_name = "ltf-autopilot-cluster"
 }
@@ -21,7 +21,7 @@ resource "google_service_account" "service_account" {
   account_id   = "ltf-service-account"
   display_name = "ltf-service-account"
   project      = var.project_id
-  
+
   # This will make Terraform try to create the service account if it doesn't exist
   # but if it does, it will import it instead of erroring
   lifecycle {
@@ -55,17 +55,17 @@ resource "google_compute_subnetwork" "gke_subnetwork" {
   region        = var.region
   network       = local.network_name
   project       = var.project_id
-  
+
   secondary_ip_range {
     range_name    = "pod-range"
     ip_cidr_range = var.gke_pod_subnet_range
   }
-  
+
   secondary_ip_range {
     range_name    = "services-range"
     ip_cidr_range = var.gke_service_subnet_range
   }
-  
+
   private_ip_google_access = true
 }
 
@@ -77,9 +77,9 @@ resource "google_container_cluster" "ltf_autopilot_cluster" {
   deletion_protection = false
 
   # Network configuration based on user input or defaults
-  network    = local.using_custom_network ? local.network_name : null
+  network = local.using_custom_network ? local.network_name : null
   subnetwork = var.subnetwork != "" ? var.subnetwork : (
-    var.enable_psc_support && local.using_custom_network ? 
+    var.enable_psc_support && local.using_custom_network ?
     google_compute_subnetwork.gke_subnetwork[0].self_link : null
   )
 
@@ -131,16 +131,16 @@ resource "google_compute_firewall" "allow_psc_ingress" {
   name    = "allow-psc-for-vector-search"
   network = local.network_name
   project = var.project_id
-  
+
   description = "Allow communication between GKE and Vector Search via PSC"
   direction   = "INGRESS"
-  
+
   # Allow from GKE to the Vector Search PSC
   allow {
     protocol = "tcp"
-    ports    = ["443", "8080-8090"]  # Ports used by Vector Search
+    ports    = ["443", "8080-8090"] # Ports used by Vector Search
   }
-  
+
   # Source is all IP ranges used by GKE
   source_ranges = [
     var.master_ipv4_cidr_block,
@@ -155,23 +155,23 @@ resource "google_compute_firewall" "allow_internal_communication" {
   name    = "allow-internal-network-communication"
   network = local.network_name
   project = var.project_id
-  
+
   description = "Allow all internal communication within the network"
   direction   = "INGRESS"
-  
+
   # Allow all protocols 
   allow {
     protocol = "tcp"
   }
-  
+
   allow {
     protocol = "udp"
   }
-  
+
   allow {
     protocol = "icmp"
   }
-  
+
   # Source is the network itself
   source_ranges = ["10.0.0.0/8"]
 }

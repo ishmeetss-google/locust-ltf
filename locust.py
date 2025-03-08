@@ -3,20 +3,140 @@
 import random
 import os
 import time
+from typing import Any, Callable
 
 import google.auth
 import google.auth.transport.requests
+import google.auth.transport.grpc
 from google.cloud.aiplatform_v1 import MatchServiceClient
 from google.cloud.aiplatform_v1 import FindNeighborsRequest
 from google.cloud.aiplatform_v1 import IndexDatapoint
 from google.cloud.aiplatform_v1.services.match_service.transports import grpc as match_transports_grpc
 import grpc
 import grpc.experimental.gevent as grpc_gevent
+import grpc_interceptor
 import locust
 from locust import between, env, FastHttpUser, User, task, events, wait_time
+import logging
 
 # Patch grpc so that it uses gevent instead of asyncio
 grpc_gevent.init_gevent()
+
+# gRPC channel cache
+_GRPC_CHANNEL_CACHE = {}
+
+class LocustInterceptor(grpc_interceptor.ClientInterceptor):
+    """Interceptor for Locust which captures response details."""
+
+    def __init__(self, environment, *args, **kwargs):
+        """Initializes the interceptor with the specified environment."""
+        super().__init__(*args, **kwargs)
+        self.env = environment
+
+    def intercept(
+        self,
+        method: Callable[Any, grpc.Future],
+        request_or_iterator: Any,
+        call_details: grpc.ClientCallDetails,
+    ) -> Any:
+        """Intercepts message to store RPC latency and response size."""
+        response = None
+        exception = None
+        end_perf_counter = None
+        response_length = 0
+        start_perf_counter = time.perf_counter()
+        try:
+            # Response type
+            #  * Unary: `grpc._interceptor._UnaryOutcome`
+            #  * Streaming: `grpc._channel._MultiThreadedRendezvous`
+            response_or_responses = method(request_or_iterator, call_details)
+            end_perf_counter = time.perf_counter()
+
+            if isinstance(response_or_responses, grpc._channel._Rendezvous):
+                responses = list(response_or_responses)
+                # Re-write perf counter to account for time taken to receive all messages.
+                end_perf_counter = time.perf_counter()
+
+                # Total length = sum(messages).
+                total_length = 0
+                for message in responses:
+                    message_pb = message.__class__.pb(message)
+                    response_length = message_pb.ByteSize()
+                    total_length += response_length
+
+                # Re-write response to return the actual responses since above logic has
+                # consumed all responses.
+                def yield_responses():
+                    for rsp in responses:
+                        yield rsp
+
+                response_or_responses = yield_responses()
+            else:
+                response = response_or_responses
+                # Unary
+                message = response.result()
+                message_pb = message.__class__.pb(message)
+                response_length = message_pb.ByteSize()
+        except grpc.RpcError as e:
+            exception = e
+            end_perf_counter = time.perf_counter()
+
+        self.env.events.request.fire(
+            request_type='grpc',
+            name=call_details.method,
+            response_time=(end_perf_counter - start_perf_counter) * 1000,
+            response_length=response_length,
+            response=response_or_responses,
+            context=None,
+            exception=exception,
+        )
+        return response_or_responses
+
+
+def _create_grpc_auth_channel(host: str) -> grpc.Channel:
+    """Create a gRPC channel with SSL and auth."""
+    credentials, _ = google.auth.default()
+    request = google.auth.transport.requests.Request()
+    CHANNEL_OPTIONS = [
+        ('grpc.use_local_subchannel_pool', True),
+    ]
+    return google.auth.transport.grpc.secure_authorized_channel(
+        credentials,
+        request,
+        host,
+        ssl_credentials=grpc.ssl_channel_credentials(),
+        options=CHANNEL_OPTIONS,
+    )
+
+
+def _cached_grpc_channel(
+    host: str, auth: bool, cache: bool = True
+) -> grpc.Channel:
+    """Return a cached gRPC channel for the given host and auth type."""
+    key = (host, auth)
+    if cache and key in _GRPC_CHANNEL_CACHE:
+        return _GRPC_CHANNEL_CACHE[key]
+
+    new_channel = (
+        _create_grpc_auth_channel(host) if auth else grpc.insecure_channel(host)
+    )
+    if not cache:
+        return new_channel
+
+    _GRPC_CHANNEL_CACHE[key] = new_channel
+    return _GRPC_CHANNEL_CACHE[key]
+
+
+def intercepted_cached_grpc_channel(
+    host: str,
+    auth: bool,
+    env: locust.env.Environment,
+    cache: bool = True,
+) -> grpc.Channel:
+    """Return a intercepted gRPC channel for the given host and auth type."""
+    channel = _cached_grpc_channel(host, auth=auth, cache=cache)
+    interceptor = LocustInterceptor(environment=env)
+    return grpc.intercept_channel(channel, interceptor)
 
 # Helper function to load configuration from file
 def load_config():
@@ -41,18 +161,24 @@ def load_config():
         'PROJECT_ID': '',
         'PSC_ENABLED': 'false',
         'MATCH_GRPC_ADDRESS': '',
-        'SERVICE_ATTACHMENT': ''
+        'SERVICE_ATTACHMENT': '',
+        'PSC_IP_ADDRESS': ''
     }
     
     for key, default in defaults.items():
         if key not in config:
             config[key] = default
-    
+            
+    # If we have PSC_IP_ADDRESS but not MATCH_GRPC_ADDRESS, construct it
+    if config.get('PSC_IP_ADDRESS') and not config.get('MATCH_GRPC_ADDRESS'):
+        config['MATCH_GRPC_ADDRESS'] = f"{config['PSC_IP_ADDRESS']}:8443"
+        
     return config
 
 # Load configuration
 config = load_config()
-print(f"Loaded configuration: PSC_ENABLED={config.get('PSC_ENABLED', 'false')}")
+print(f"Loaded configuration: PSC_ENABLED={config.get('PSC_ENABLED', 'false')}, "
+      f"MATCH_GRPC_ADDRESS={config.get('MATCH_GRPC_ADDRESS', '')}")
 
 @events.init_command_line_parser.add_listener
 def _(parser):
@@ -85,7 +211,7 @@ def _(parser):
     )
 
 
-class VectorSearchHttpUser(FastHttpUser):
+class HttpVectorSearchUser(FastHttpUser):
     """User that connects to Vector Search public endpoint using HTTP."""
     
     def __init__(self, environment: env.Environment):
@@ -169,7 +295,7 @@ class VectorSearchHttpUser(FastHttpUser):
                 response.failure(f"Failed with status code: {response.status_code}, body: {response.text}")
 
 
-class VectorSearchGrpcUser(User):
+class GrpcVectorSearchUser(User):
     """User that connects to Vector Search private endpoint using gRPC over PSC."""
     
     def __init__(self, environment: env.Environment):
@@ -193,11 +319,25 @@ class VectorSearchGrpcUser(User):
         
         # Get the gRPC address from the config
         self.match_grpc_address = config.get('MATCH_GRPC_ADDRESS', '')
+        
+        # If MATCH_GRPC_ADDRESS doesn't include a port, add the default port 8443
+        if self.match_grpc_address and ":" not in self.match_grpc_address:
+            self.match_grpc_address = f"{self.match_grpc_address}:8443"
+            logging.info(f"Added default port 8443 to MATCH_GRPC_ADDRESS: {self.match_grpc_address}")
+        
         if not self.match_grpc_address:
             raise ValueError("MATCH_GRPC_ADDRESS must be provided for PSC/gRPC connections")
+        
+        logging.info(f"Using PSC/gRPC address: {self.match_grpc_address}")
             
-        # Create a gRPC channel and client
-        channel = self._create_grpc_channel(self.match_grpc_address)
+        # Create a gRPC channel with interceptor
+        channel = intercepted_cached_grpc_channel(
+            self.match_grpc_address,
+            auth=False,  # PSC connections don't need auth
+            env=environment
+        )
+        
+        # Create the client
         self.client = MatchServiceClient(
             transport=match_transports_grpc.MatchServiceGrpcTransport(
                 channel=channel
@@ -207,12 +347,6 @@ class VectorSearchGrpcUser(User):
         # Store parsed options needed for requests
         self.num_neighbors = environment.parsed_options.num_neighbors
         self.fraction_leaf_nodes_to_search_override = environment.parsed_options.fraction_leaf_nodes_to_search_override
-
-    def _create_grpc_channel(self, address):
-        """Create a gRPC channel for PSC communication."""
-        # For PSC, we don't need SSL or auth credentials
-        # The channel connects directly to the private endpoint
-        return grpc.insecure_channel(address)
 
     @task
     def findNearestNeighbors(self):
@@ -243,32 +377,14 @@ class VectorSearchGrpcUser(User):
             queries=[query]
         )
         
-        # Send the request and measure the performance
-        start_time = time.perf_counter()
         try:
             response = self.client.find_neighbors(request)
-            response_time = (time.perf_counter() - start_time) * 1000
-            
-            # Log the response to Locust
-            self.environment.events.request.fire(
-                request_type="grpc",
-                name="MatchService.FindNeighbors",
-                response_time=response_time,
-                response_length=0,  # We don't track the response size for now
-                exception=None
-            )
         except Exception as e:
-            response_time = (time.perf_counter() - start_time) * 1000
-            
-            # Log the error to Locust
-            self.environment.events.request.fire(
-                request_type="grpc",
-                name="MatchService.FindNeighbors",
-                response_time=response_time,
-                response_length=0,
-                exception=e
-            )
+            logging.error(f"Error in gRPC call: {str(e)}")
+            raise  # The interceptor will handle the error reporting
 
 
 # Determine which user class to use based on configuration
-UserClass = VectorSearchGrpcUser if config.get('PSC_ENABLED', 'false').lower() in ('true', 'yes', '1') else VectorSearchHttpUser
+psc_enabled = config.get('PSC_ENABLED', 'false').lower() in ('true', 'yes', '1')
+UserClass = GrpcVectorSearchUser if psc_enabled else HttpVectorSearchUser
+logging.info(f"Selected user class: {UserClass.__name__} (PSC Enabled: {psc_enabled})")
