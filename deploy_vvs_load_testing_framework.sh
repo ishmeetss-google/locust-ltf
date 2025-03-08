@@ -50,6 +50,13 @@ export need_external_ip
 
 echo "External IP requested status =" $need_external_ip
 
+# Ask about blended vs single search
+read -r -p "Does your deployed index contain sparse and dense embeddings? (y/n): " blended_search 
+export blended_search
+
+echo "Blended search requested status =" $blended_search
+
+
 # Enable required services
 echo "Enabling required Google Cloud services..."
 gcloud services enable aiplatform.googleapis.com \
@@ -70,7 +77,7 @@ gcloud artifacts repositories create locust-docker-repo --repository-format=dock
 mkdir -p config
 touch config/locust_config.env
 # Set correct permissions
-chmod 666 ./public_http_query.py    
+chmod 666 ./locust_tests/public_http_query.py    
 chmod 666 config/locust_config.env
 
 # Phase 1: Deploy Vector Search infrastructure first
@@ -171,13 +178,29 @@ export VS_ENDPOINT_HOST=$(terraform output -raw vector_search_deployed_index_end
 
 # Save these to a temporary file for Docker build
 cd ..
-cat <<EOF > config/locust_config.env
-INDEX_DIMENSIONS=${VS_DIMENSIONS}
-DEPLOYED_INDEX_ID=${VS_DEPLOYED_INDEX_ID}
-INDEX_ENDPOINT_ID=${VS_INDEX_ENDPOINT_ID}
-ENDPOINT_HOST=${VS_ENDPOINT_HOST}
-PROJECT_ID=${PROJECT_ID}
+if [[ -n "$blended_search" ]]; then
+    cat <<EOF > config/locust_config.env
+    INDEX_DIMENSIONS=${VS_DIMENSIONS}
+    DEPLOYED_INDEX_ID=${VS_DEPLOYED_INDEX_ID}
+    INDEX_ENDPOINT_ID=${VS_INDEX_ENDPOINT_ID}
+    ENDPOINT_HOST=${VS_ENDPOINT_HOST}
+    PROJECT_ID=${PROJECT_ID}
+    SPARSE_EMBEDDING_NUM_DIMENSIONS=10000
+    SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES=200
+    NUM_NEIGHBORS=20
+    DENSE_EMBEDDING_NUM_DIMENSIONS=768
+    RETURN_FULL_DATAPOINT=False
+    NUM_EMBEDDINGS_PER_REQUEST=50
 EOF
+else
+    cat <<EOF > config/locust_config.env
+    INDEX_DIMENSIONS=${VS_DIMENSIONS}
+    DEPLOYED_INDEX_ID=${VS_DEPLOYED_INDEX_ID}
+    INDEX_ENDPOINT_ID=${VS_INDEX_ENDPOINT_ID}
+    ENDPOINT_HOST=${VS_ENDPOINT_HOST}
+    PROJECT_ID=${PROJECT_ID}
+EOF
+fi
 
 # Phase 2: Build and push Docker image with the config
 echo "Building and pushing Docker image..."

@@ -1,23 +1,25 @@
-"""Locust file for http load testing Vector Search endpoints with blended search."""
+"""Locust file for gRPC load testing public VVS endpoints."""
 
 import random
-import os
-import json
 import time
+import uuid
+import os
 
 import google.auth
-import google.auth.transport.requests
+from google.cloud.aiplatform_v1 import FindNeighborsRequest, IndexDatapoint, MatchServiceClient
+from google.cloud.aiplatform_v1.services.match_service.transports import grpc as match_transports_grpc
+import grpc
+import grpc.experimental.gevent as grpc_gevent
 import locust
-from locust import between
-from locust import env
-from locust import FastHttpUser
-from locust import task
-from locust import wait_time
+from locust import between, env, FastHttpUser, task, User
+
+# patch grpc so that it uses gevent instead of asyncio
+grpc_gevent.init_gevent()
 
 # Helper function to load configuration from file
 def load_config():
     config = {}
-    config_path = '/tasks/locust_config.env'
+    config_path = 'config/locust_config.env'
     
     if os.path.exists(config_path):
         with open(config_path, 'r') as f:
@@ -30,8 +32,7 @@ def load_config():
     
     # Set default values if not in config
     defaults = {
-        'INDEX_DIMENSIONS': '768',     # Dense vector dimensions
-        'SPARSE_DIMENSIONS': '5000',   # Sparse vector dimensions
+        'INDEX_DIMENSIONS': '768',
         'DEPLOYED_INDEX_ID': '',
         'INDEX_ENDPOINT_ID': '',
         'ENDPOINT_HOST': '',
@@ -46,244 +47,240 @@ def load_config():
 
 # Load configuration
 config = load_config()
-
 @locust.events.init_command_line_parser.add_listener
 def _(parser):
-    """Add command line arguments to the Locust environment."""
-    # Add user-focused test parameters
-    parser.add_argument(
-        "--num-neighbors", 
-        type=int, 
-        default=20, 
-        help="Number of nearest neighbors to find in each query"
+  """Add command line arguments to the Locust environment.
+
+  Args:
+    parser: parser to add arguments
+  """
+  parser.add_argument(
+      "--deployed-index-id",
+      type=str,
+      default="",
+      help="Deployed index id for gRPC calls",
+  )
+  parser.add_argument(
+      "--num-neighbors", type=int, default=20, help="number of neighbors"
+  )
+  parser.add_argument(
+      "--index-endpoint-resource-name",
+      type=str,
+      default="",
+      help=(
+          """resourcename of index endpoint, required for public endpoint query requests.
+          e.g. projects/1077649599081/locations/us-central1/indexEndpoints/3676832853980610560"""
+      ),
+  )
+  parser.add_argument(
+      "--index-resource-name",
+      type=str,
+      default=config.get('INDEX_RESOURCE_NAME'),
+      help="resource name of index, required for public endpoint upsert requests.",
+  )
+  parser.add_argument(
+      "--return-full-datapoint",
+      type=bool,
+      default=False,
+      help="Whether to return full datapoints. Needed only for query.",
+  )
+  parser.add_argument(
+      "--dense-embedding-num-dimensions",
+      type=int,
+      default=config.get('INDEX_DIMENSIONS'),
+      help=(
+        '''Number of dimensions for dense embedding. For dense-only embedding, 
+        this dimension is the number of total dimensions. For hybrid 
+        embedding, this dimension is the number of dimensions for the dense
+        embedding feature vector.'''
+      ),
+  )
+  parser.add_argument(
+      "--sparse-embedding-num-dimensions",
+      type=int,
+      default=0,
+      help=(
+          "Sparse embedding max number of dimensions. Specifying a"
+          "value greater than 0 to enable hybrid embedding query."
+      ),
+  )
+  parser.add_argument(
+      "--sparse-embedding-num-dimensions-with-values",
+      type=int,
+      default=0,
+      help=(
+          "Sparse embedding number of dimensions with values. Should be",
+          "greater than 0 and less than or equal to",
+          "sparse_embedding_num_dimensions.",
+      ),
+  )
+  parser.add_argument(
+      "--num-embeddings-per-request",
+      type=int,
+      default=1,
+      help="Optional. Number of embeddings per request.",
     )
-    
-    parser.add_argument(
-        "--return-full-datapoint",
-        action="store_true",
-        default=False,
-        help="Whether to return full datapoints. Increases response size."
-    )
-    
-    # Add QPS per user control
-    parser.add_argument(
-        "--qps-per-user",
-        type=int,
-        default=10,
-        help=(
-            'The QPS each user should target. Locust will try to maintain this rate, '
-            'but if latency is high, actual QPS may be lower.'
-        ),
-    )
-    
-    # Add sparse search parameters
-    parser.add_argument(
-        "--sparse-values-count",
-        type=int,
-        default=10,
-        help="Number of non-zero values in sparse vectors"
-    )
-    
-    # Add hybrid parameter
-    parser.add_argument(
-        "--hybrid-alpha",
-        type=float,
-        default=0.5,
-        help="Alpha parameter for hybrid search (0.0-1.0). Higher values favor dense search."
-    )
-    
-    # Add advanced parameters
-    parser.add_argument(
-        "--fraction-leaf-nodes-to-search-override",
-        type=float,
-        default=0.0,
-        help="Advanced: Fraction of leaf nodes to search (0.0-1.0). Higher values increase recall but reduce performance."
-    )
-    
-    parser.add_argument(
-        "--debug-mode",
-        action="store_true",
-        default=False,
-        help="Enable debug output"
-    )
+# class VectorSearchPublicEndpointGrpcUser(User):
+#   """User that connects to Vector Search public endpoint using gRPC."""
+
+#   wait_time = between(1, 2)
+
+#   def __init__(self, environment: env.Environment):
+#     super().__init__(environment)
+#     self.vector_search_resource_name = (
+#         self.environment.parsed_options.index_endpoint_resource_name
+#     )
+#     credentials, _ = google.auth.default()
+#     request = google.auth.transport.requests.Request()
+#     public_channel = google.auth.transport.grpc.secure_authorized_channel(
+#         credentials,
+#         request,
+#         environment.host,
+#         ssl_credentials=grpc.ssl_channel_credentials(),
+#     )
+
+#     self.data_client = MatchServiceClient(
+#         transport=match_transports_grpc.MatchServiceGrpcTransport(
+#             channel=public_channel,
+#         ),
+#     )
+
+#   @task
+#   def findNearestNeighbor(self):
+#     request = FindNeighborsRequest(
+#         index_endpoint=self.vector_search_resource_name,
+#         deployed_index_id=self.environment.parsed_options.deployed_index_id,
+#         return_full_datapoint=self.environment.parsed_options.return_full_datapoint,
+#     )
+#     dp = IndexDatapoint(
+#         datapoint_id="0",
+#     )
+#     dp.feature_vector = [
+#         random.randint(-1000000, 1000000)
+#         for _ in range(
+#             self.environment.parsed_options.dense_embedding_num_dimensions
+#         )
+#     ]
+
+#     # hybrid embedding query
+#     if (
+#         self.environment.parsed_options.sparse_embedding_num_dimensions > 0
+#         and self.environment.parsed_options.sparse_embedding_num_dimensions_with_values
+#         > 0
+#         and self.environment.parsed_options.sparse_embedding_num_dimensions_with_values
+#         <= self.environment.parsed_options.sparse_embedding_num_dimensions
+#     ):
+#       dp.sparse_embedding = IndexDatapoint.SparseEmbedding(
+#           values=[
+#               random.randint(-1000000, 1000000)
+#               for _ in range(
+#                   self.environment.parsed_options.sparse_embedding_num_dimensions_with_values
+#               )
+#           ],
+#           dimensions=random.sample(
+#               range(
+#                   self.environment.parsed_options.sparse_embedding_num_dimensions,
+#               ),
+#               self.environment.parsed_options.sparse_embedding_num_dimensions_with_values,
+#           ),
+#       )
+
+#     query = FindNeighborsRequest.Query(
+#         datapoint=dp,
+#         neighbor_count=self.environment.parsed_options.num_neighbors,
+#     )
+#     if (
+#         self.environment.parsed_options.fraction_leaf_nodes_to_search_override
+#         > 0
+#     ):
+#       query.fraction_leaf_nodes_to_search_override = (
+#           self.environment.parsed_options.fraction_leaf_nodes_to_search_override
+#       )
+#     request.queries.append(query)
+#     start_perf_counter = time.perf_counter()
+#     try:
+#       response = self.data_client.find_neighbors(request)
+#       self.environment.events.request.fire(
+#           request_type="grpc",
+#           name="MatchEngine.FindNeighbors",
+#           response_time=(time.perf_counter() - start_perf_counter) * 1000,
+#           response=response,
+#           response_length=0,
+#       )
+#     except Exception as e:
+#       self.environment.events.request.fire(
+#           request_type="grpc",
+#           name="MatchEngine.FindNeighbors",
+#           response_time=(time.perf_counter() - start_perf_counter) * 1000,
+#           response_length=0,
+#           exception=e,
+#       )
 
 
-class VectorSearchBlendedUser(FastHttpUser):
-    """User that performs blended vector searches with both dense and sparse vectors."""
-    # Default wait time between requests - will be overridden if qps-per-user is set
-    host = f'https://{config.get("ENDPOINT_HOST")}'
 
-    def __init__(self, environment: env.Environment):
-        # Set up QPS-based wait time if specified
-        user_qps = environment.parsed_options.qps_per_user
-        if user_qps > 0:
-            # Use constant throughput based on QPS setting
-            def wait_time_fn():
-                fn = wait_time.constant_throughput(user_qps)
-                return fn(self)
-            self.wait_time = wait_time_fn
-            
-        # Call parent initialization
-        super().__init__(environment)
-        
-        # Debug mode
-        self.debug_mode = environment.parsed_options.debug_mode
-        
-        # Read technical parameters from config file
-        self.deployed_index_id = config.get('DEPLOYED_INDEX_ID')
-        self.index_endpoint_id = config.get('INDEX_ENDPOINT_ID')
-        self.project_id = config.get('PROJECT_ID')
-        self.dense_dimensions = int(config.get('INDEX_DIMENSIONS', 768))
-        self.sparse_dimensions = int(config.get('SPARSE_DIMENSIONS', 5000))
-        self.sparse_values_count = environment.parsed_options.sparse_values_count
-        self.hybrid_alpha = environment.parsed_options.hybrid_alpha
-        
-        # Set up authentication
-        self.credentials, _ = google.auth.default(
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+class VectorSearchPublicUpsertFastHTTPUser(FastHttpUser):
+  """User that upserts datapoints to Vertex Vector Search Index."""
+
+  wait_time = locust.between(1, 2)
+  host = f'https://{config.get("ENDPOINT_HOST")}'
+
+  def __init__(self, environment: locust.env.Environment):
+    super().__init__(environment)
+    self.index_url = (
+        "/v1/"
+        + self.environment.parsed_options.index_resource_name
+        + ":upsertDatapoints"
+    )
+    self.credentials, _ = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
+    self.auth_req = google.auth.transport.requests.Request()
+    self.credentials.refresh(self.auth_req)
+    self.headers = {
+        "Authorization": "Bearer " + self.credentials.token,
+        "Content-Type": "application/json",
+    }
+
+  @locust.task
+  def upsertDatapoints(self):
+    dps = {"datapoints": []}
+    for _ in range(self.environment.parsed_options.num_embeddings_per_request):
+      dp = {"datapointId": str(uuid.uuid4())}
+      dp["featureVector"] = [
+          random.random()
+          for _ in range(
+              self.environment.parsed_options.dense_embedding_num_dimensions
+          )
+      ]
+      # hybrid embedding query
+      if (
+          self.environment.parsed_options.sparse_embedding_num_dimensions > 0
+          and self.environment.parsed_options.sparse_embedding_num_dimensions_with_values
+          > 0
+          and self.environment.parsed_options.sparse_embedding_num_dimensions_with_values
+          <= self.environment.parsed_options.sparse_embedding_num_dimensions
+      ):
+        dp["sparseEmbedding"] = {}
+        dp["sparseEmbedding"]["values"] = []
+        for _ in range(
+            self.environment.parsed_options.sparse_embedding_num_dimensions_with_values
+        ):
+          dp["sparseEmbedding"]["values"].append(random.uniform(-1, 1))
+        dp["sparseEmbedding"]["dimensions"] = random.sample(
+            range(
+                self.environment.parsed_options.sparse_embedding_num_dimensions,
+            ),
+            self.environment.parsed_options.sparse_embedding_num_dimensions_with_values,
         )
-        self.auth_req = google.auth.transport.requests.Request()
-        self.credentials.refresh(self.auth_req)
-        self.headers = {
-            "Authorization": "Bearer " + self.credentials.token,
-            "Content-Type": "application/json",
-        }
-        
-        # Build the endpoint URL
-        self.public_endpoint_url = f"/v1/{self.index_endpoint_id}:findNeighbors"
-        
-        # Log configuration in debug mode
-        if self.debug_mode:
-            self._log_config()
-    
-    def _log_config(self):
-        """Log configuration for debugging."""
-        print("\n=== Blended Vector Search Configuration ===")
-        print(f"Host: {self.host}")
-        print(f"Endpoint URL: {self.public_endpoint_url}")
-        print(f"Deployed Index ID: {self.deployed_index_id}")
-        print(f"Dense Dimensions: {self.dense_dimensions}")
-        print(f"Sparse Dimensions: {self.sparse_dimensions}")
-        print(f"Sparse Values Count: {self.sparse_values_count}")
-        print(f"Hybrid Alpha: {self.hybrid_alpha}")
-        print(f"QPS per User: {self.environment.parsed_options.qps_per_user}")
-        print(f"Num Neighbors: {self.environment.parsed_options.num_neighbors}")
-        print(f"Return Full Datapoint: {self.environment.parsed_options.return_full_datapoint}")
-        print("=====================================\n")
+      dps["datapoints"].append(dp)
 
-    @task
-    def blended_search(self):
-        """Execute a blended Vector Search query with both dense and sparse vectors."""
-        # Create the request
-        request = {
-            "deployedIndexId": self.deployed_index_id,
-            "returnFullDatapoint": self.environment.parsed_options.return_full_datapoint,
-            "queries": []
-        }
-        
-        # Generate a random dense vector
-        dense_vector = [
-            random.uniform(-1.0, 1.0)
-            for _ in range(self.dense_dimensions)
-        ]
-        
-        # Randomly select dimensions and values for sparse embedding
-        sparse_dimensions = sorted(random.sample(
-            range(self.sparse_dimensions), 
-            self.sparse_values_count
-        ))
-        
-        sparse_values = [
-            random.uniform(0.1, 1.0) 
-            for _ in range(self.sparse_values_count)
-        ]
-        
-        # Create datapoint with both vectors
-        dp = {
-            "datapointId": "0",
-            "featureVector": dense_vector,
-            "sparseVector": {
-                "dimensions": sparse_dimensions,
-                "values": sparse_values
-            }
-        }
-        
-        # Create query with RRF alpha parameter
-        query = {
-            "datapoint": dp,
-            "neighborCount": self.environment.parsed_options.num_neighbors,
-            "rrf": {
-                "alpha": self.hybrid_alpha
-            }
-        }
-        
-        # Add to request
-        request["queries"].append(query)
-        
-        # Add fraction leaf nodes parameter if specified
-        leaf_override = self.environment.parsed_options.fraction_leaf_nodes_to_search_override
-        if leaf_override > 0:
-            request["fractionLeafNodesToSearchOverride"] = leaf_override
-        
-        # Debug output
-        if self.debug_mode:
-            sparse_info = {
-                "dimensions_count": len(sparse_dimensions),
-                "sample_dimensions": sparse_dimensions[:3] if len(sparse_dimensions) > 3 else sparse_dimensions,
-                "sample_values": sparse_values[:3] if len(sparse_values) > 3 else sparse_values
-            }
-            print(f"Sending blended search with alpha: {self.hybrid_alpha}, sparse info: {json.dumps(sparse_info)}")
-        
-        # Send the request
-        with self.client.request(
-            "POST",
-            url=self.public_endpoint_url,
-            json=request,
-            catch_response=True,
-            headers=self.headers,
-        ) as response:
-            
-            if response.status_code == 401:
-                # Refresh token on auth error
-                response.failure("Authentication failed (401)")
-                self.credentials.refresh(self.auth_req)
-                self.headers["Authorization"] = "Bearer " + self.credentials.token
-                if self.debug_mode:
-                    print("Auth error (401), token refreshed")
-            
-            elif response.status_code == 404:
-                response.failure(f"Endpoint not found (404): {response.text}")
-                if self.debug_mode:
-                    print(f"Endpoint not found: {self.public_endpoint_url}")
-                    print("Check your INDEX_ENDPOINT_ID configuration")
-            
-            elif response.status_code == 400:
-                response.failure(f"Bad request (400): {response.text}")
-                if self.debug_mode:
-                    print(f"Bad request error: {response.text}")
-                    print("This may indicate an issue with the request format or sparse vector implementation")
-            
-            elif response.status_code != 200:
-                # Mark other failed responses
-                response.failure(f"Failed with status code: {response.status_code}, body: {response.text}")
-                if self.debug_mode:
-                    print(f"Error: {response.status_code} - {response.text}")
-            
-            else:
-                # Success case
-                response.success()
-                if self.debug_mode:
-                    try:
-                        result = json.loads(response.text)
-                        neighbors = result.get("nearestNeighbors", [{}])[0].get("neighbors", [])
-                        neighbor_count = len(neighbors)
-                        
-                        # Show some result details
-                        if neighbor_count > 0 and self.debug_mode:
-                            sample_neighbors = neighbors[:2] if neighbor_count > 2 else neighbors
-                            print(f"Found {neighbor_count} neighbors in {response_time:.2f}ms")
-                            for i, neighbor in enumerate(sample_neighbors):
-                                print(f"  Neighbor {i+1}: ID={neighbor.get('id', 'unknown')}, " +
-                                      f"Distance={neighbor.get('distance', 'unknown')}")
-                    except:
-                        print(f"Query successful in {response_time:.2f}ms but couldn't parse response")
+    with self.client.request(
+        "POST",
+        url=self.index_url,
+        json=dps,
+        catch_response=True,
+        headers=self.headers,
+    ) as response:
+      if response.status_code == 401:
+        self.credentials.refresh(self.auth_req)
+        self.headers["Authorization"] = "Bearer " + self.credentials.token
