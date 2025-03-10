@@ -30,7 +30,7 @@ resource "google_project_iam_member" "aiplatform_viewer_k8s_binding" {
   project = var.project_id
   role    = "roles/aiplatform.viewer"
   member  = "principal://iam.googleapis.com/projects/${var.project_number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/default/sa/default"
-  
+
   depends_on = [
     google_container_cluster.ltf_autopilot_cluster,
     # Add a time delay or another indicator that the cluster is fully ready
@@ -79,7 +79,7 @@ resource "kubernetes_deployment" "locust_master" {
             mount_path = "/tasks/locust_config.env"
             sub_path   = "locust_config.env"
           }
-          args  = ["-f", "/tasks/public_http_query.py", "--master", "--class-picker"]
+          args = ["-f", "/tasks/locust.py", "--master", "--class-picker", "--tags=${var.locust_test_type}"]
           port {
             container_port = 8089
             name           = "loc-master-web"
@@ -132,7 +132,7 @@ resource "kubernetes_deployment" "locust_worker" {
             mount_path = "/tasks/locust_config.env"
             sub_path   = "locust_config.env"
           }
-          args  = ["-f", "/tasks/public_http_query.py", "--worker", "--master-host", "${local.resource_prefix}-master"]
+          args = ["-f", "/tasks/locust.py", "--worker", "--master-host", "${local.resource_prefix}-master", "--tags=${var.locust_test_type}"]
           resources {
             requests = {
               cpu = "1000m"
@@ -156,19 +156,19 @@ resource "kubernetes_service" "locust_master" {
       app = "${local.resource_prefix}-master"
     }
     port {
-      port = 8089
+      port        = 8089
       target_port = "loc-master-web"
-      name  = "loc-master-web"
+      name        = "loc-master-web"
     }
     port {
-      port = 5557
+      port        = 5557
       target_port = "loc-master-p1"
-      name  = "loc-master-p1"
+      name        = "loc-master-p1"
     }
     port {
-      port = 5558
+      port        = 5558
       target_port = "loc-master-p2"
-      name  = "loc-master-p2"
+      name        = "loc-master-p2"
     }
   }
 }
@@ -190,7 +190,7 @@ resource "kubernetes_service" "locust_master_web" {
     port {
       port        = 8089
       target_port = "loc-master-web"
-      name = "loc-master-web"
+      name        = "loc-master-web"
     }
     type = "LoadBalancer"
   }

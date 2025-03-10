@@ -87,7 +87,7 @@ variable "index_distance_measure_type" {
 variable "index_shard_size" {
   type        = string
   description = "Shard size for the Vector Search index (SHARD_SIZE_SMALL, SHARD_SIZE_MEDIUM, SHARD_SIZE_LARGE)"
-  default     = "SHARD_SIZE_MEDIUM"  
+  default     = "SHARD_SIZE_MEDIUM"
   validation {
     condition     = contains(["SHARD_SIZE_SMALL", "SHARD_SIZE_MEDIUM", "SHARD_SIZE_LARGE"], var.index_shard_size)
     error_message = "Invalid value for shard_size. Must be one of: SHARD_SIZE_SMALL, SHARD_SIZE_MEDIUM, SHARD_SIZE_LARGE."
@@ -293,4 +293,51 @@ variable "image" {
 variable "deployment_id" {
   type        = string
   description = "Unique identifier for this deployment"
+}
+variable "locust_test_type" {
+  description = "The type of load test to run (http or grpc)"
+  type        = string
+  default     = "http"
+  
+  validation {
+    condition     = contains(["http", "grpc"], var.locust_test_type)
+    error_message = "The locust_test_type must be either 'http' or 'grpc'."
+  }
+}
+
+# Additional variables for GKE network configuration
+variable "subnetwork" {
+  description = "The subnetwork to host the GKE cluster in (format: projects/{project}/regions/{region}/subnetworks/{subnetwork})"
+  type        = string
+  default     = ""
+}
+
+variable "use_private_endpoint" {
+  description = "Whether the master's internal IP address is used as the cluster endpoint"
+  type        = bool
+  default     = false
+}
+
+variable "master_ipv4_cidr_block" {
+  description = "The IP range in CIDR notation to use for the hosted master network"
+  type        = string
+  default     = "172.16.0.0/28"
+}
+
+variable "psc_network_name" {
+  description = "The name of the network to use for PSC (used when endpoint_network is not specified)"
+  type        = string
+  default     = "vertex-psc-network"
+}
+
+variable "gke_pod_subnet_range" {
+  description = "IP address range for GKE pods in CIDR notation"
+  type        = string
+  default     = "10.4.0.0/14"
+}
+
+variable "gke_service_subnet_range" {
+  description = "IP address range for GKE services in CIDR notation"
+  type        = string
+  default     = "10.0.32.0/20"
 }
