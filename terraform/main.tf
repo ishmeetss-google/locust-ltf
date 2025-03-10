@@ -65,6 +65,7 @@ module "vector_search" {
   deployed_index_create_timeout         = var.deployed_index_create_timeout
   deployed_index_update_timeout         = var.deployed_index_update_timeout
   deployed_index_delete_timeout         = var.deployed_index_delete_timeout
+  deployment_id                         = var.deployment_id
 }
 
 # Add these resources to your main.tf file when Private Service Connect is enabled

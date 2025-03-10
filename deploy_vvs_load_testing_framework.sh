@@ -77,7 +77,7 @@ gcloud artifacts repositories create locust-docker-repo --repository-format=dock
 mkdir -p config
 touch config/locust_config.env
 # Set correct permissions
-chmod 666 ./locust_tests/public_http_query.py    
+chmod 666 ./locust_tests/locust.py    
 chmod 666 config/locust_config.env
 
 # Phase 1: Deploy Vector Search infrastructure first
@@ -179,7 +179,7 @@ if [[ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" == "true" ]]; then
   [[ -n "$GKE_SERVICE_SUBNET_RANGE" ]] && echo "gke_service_subnet_range = \"$GKE_SERVICE_SUBNET_RANGE\"" >> terraform.tfvars
 fi
 
-# Determine the test type based on PSC_ENABLED
+# Determine the test t=pe based on PSC_ENABLED
 if [ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" = "true" ]; then
   export LOCUST_TEST_TYPE="grpc"
   echo "Setting load test type to gRPC for PSC endpoint"
