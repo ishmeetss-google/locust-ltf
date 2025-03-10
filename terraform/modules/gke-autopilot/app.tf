@@ -75,7 +75,7 @@ resource "kubernetes_deployment" "locust_master" {
             mount_path = "/tasks/locust_config.env"
             sub_path   = "locust_config.env"
           }
-          args = ["-f", "/tasks/locust.py", "--master", "--class-picker"]
+          args = ["-f", "/tasks/locust.py", "--master", "--class-picker", "--tags=${var.locust_test_type}"]
           port {
             container_port = 8089
             name           = "loc-master-web"
@@ -128,7 +128,7 @@ resource "kubernetes_deployment" "locust_worker" {
             mount_path = "/tasks/locust_config.env"
             sub_path   = "locust_config.env"
           }
-          args = ["-f", "/tasks/locust.py", "--worker", "--master-host", "locust-master"]
+          args = ["-f", "/tasks/locust.py", "--worker", "--master-host", "locust-master", "--tags=${var.locust_test_type}"]
           resources {
             requests = {
               cpu = "1000m"

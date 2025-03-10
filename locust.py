@@ -16,8 +16,11 @@ import grpc
 import grpc.experimental.gevent as grpc_gevent
 import grpc_interceptor
 import locust
-from locust import between, env, FastHttpUser, User, task, events, wait_time
+from locust import between, env, FastHttpUser, User, task, events, wait_time, tag
 import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
 # Patch grpc so that it uses gevent instead of asyncio
 grpc_gevent.init_gevent()
@@ -35,7 +38,7 @@ class LocustInterceptor(grpc_interceptor.ClientInterceptor):
 
     def intercept(
         self,
-        method: Callable[Any, grpc.Future],
+        method: Callable[[Any, grpc.ClientCallDetails], Any],
         request_or_iterator: Any,
         call_details: grpc.ClientCallDetails,
     ) -> Any:
@@ -149,8 +152,9 @@ def load_config():
                 if '=' in line:
                     key, value = line.strip().split('=', 1)
                     config[key] = value
+        logging.info(f"Loaded configuration from {config_path}")
     else:
-        print("Warning: Config file not found at", config_path)
+        logging.warning(f"Warning: Config file not found at {config_path}")
     
     # Set default values if not in config
     defaults = {
@@ -171,12 +175,13 @@ def load_config():
             
     # If we have PSC_IP_ADDRESS but not MATCH_GRPC_ADDRESS, construct it
     if config.get('PSC_IP_ADDRESS') and not config.get('MATCH_GRPC_ADDRESS'):
-        config['MATCH_GRPC_ADDRESS'] = f"{config['PSC_IP_ADDRESS']}:10000"  
+        config['MATCH_GRPC_ADDRESS'] = f"{config['PSC_IP_ADDRESS']}:10000"
+        
     return config
 
 # Load configuration
 config = load_config()
-print(f"Loaded configuration: PSC_ENABLED={config.get('PSC_ENABLED', 'false')}, "
+logging.info(f"Loaded configuration: PSC_ENABLED={config.get('PSC_ENABLED', 'false')}, "
       f"MATCH_GRPC_ADDRESS={config.get('MATCH_GRPC_ADDRESS', '')}, "
       f"ENDPOINT_HOST={config.get('ENDPOINT_HOST', '')}")
 
@@ -209,13 +214,47 @@ def _(parser):
         default=0.0,
         help="Advanced: Fraction of leaf nodes to search (0.0-1.0). Higher values increase recall but reduce performance."
     )
-
-# Put a name-unique version at module level
-class VectorSearchHttpLoadTester(FastHttpUser):
-    """User that connects to Vector Search public endpoint using HTTP."""
     
-    # Set default host to avoid the error
-    host = "https://placeholder.com"
+    # Add auto-host flag
+    parser.add_argument(
+        "--auto-host",
+        action="store_true",
+        default=True,
+        help="Automatically set host based on PSC configuration"
+    )
+
+@events.init.add_listener
+def on_locust_init(environment, **kwargs):
+    """Set up the host and tags based on configuration."""
+    is_psc_enabled = config.get('PSC_ENABLED', 'false').lower() in ('true', 'yes', '1')
+    
+    # Set default tags based on PSC mode if no tags were specified
+    if hasattr(environment.parsed_options, 'tags') and not environment.parsed_options.tags:
+        if is_psc_enabled:
+            environment.parsed_options.tags = ['grpc']
+            logging.info("Auto-setting tags to 'grpc' based on PSC configuration")
+        else:
+            environment.parsed_options.tags = ['http']
+            logging.info("Auto-setting tags to 'http' based on PSC configuration")
+    
+    # Set host based on PSC mode if no host was specified
+    if not environment.host:
+        if is_psc_enabled:
+            # PSC/gRPC mode
+            grpc_address = config.get('MATCH_GRPC_ADDRESS', '')
+            if grpc_address:
+                logging.info(f"Auto-setting host to gRPC address: {grpc_address}")
+                environment.host = grpc_address
+        else:
+            # HTTP mode
+            endpoint_host = config.get('ENDPOINT_HOST', '')
+            if endpoint_host:
+                host = f"https://{endpoint_host}"
+                logging.info(f"Auto-setting host to HTTP endpoint: {host}")
+                environment.host = host
+
+class VectorSearchUser(User):
+    """Combined Vector Search user class with both HTTP and gRPC implementations."""
     
     def __init__(self, environment: env.Environment):
         # Set up QPS-based wait time if specified
@@ -226,13 +265,6 @@ class VectorSearchHttpLoadTester(FastHttpUser):
                 fn = wait_time.constant_throughput(user_qps)
                 return fn(self)
             self.wait_time = wait_time_fn
-            
-        # Set the host from config before calling parent init
-        endpoint_host = config.get("ENDPOINT_HOST")
-        if endpoint_host:
-            self.host = f'https://{endpoint_host}'
-            
-        logging.info(f"Using HTTP host: {self.host}")
         
         # Call parent initialization
         super().__init__(environment)
@@ -243,42 +275,82 @@ class VectorSearchHttpLoadTester(FastHttpUser):
         self.project_id = config.get('PROJECT_ID')
         self.dimensions = int(config.get('INDEX_DIMENSIONS', 768))
         
-        # Set up authentication
-        self.credentials, _ = google.auth.default(
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
-        self.auth_req = google.auth.transport.requests.Request()
-        self.credentials.refresh(self.auth_req)
-        self.headers = {
-            "Authorization": "Bearer " + self.credentials.token,
-            "Content-Type": "application/json",
-        }
+        # Determine which mode we're running in based on PSC_ENABLED
+        self.use_psc = config.get('PSC_ENABLED', 'false').lower() in ('true', 'yes', '1')
         
-        # Build the endpoint URL
-        self.public_endpoint_url = f"/v1/{self.index_endpoint_id}:findNeighbors"
-        
-        # Build the base request
-        self.request = {
-            "deployedIndexId": self.deployed_index_id,
-        }
-        
-        dp = {
-            "datapointId": "0",
-        }
-        query = {
-            "datapoint": dp,
-            "neighborCount": environment.parsed_options.num_neighbors,
-        }
-        
-        # Add optional parameters if specified
-        if environment.parsed_options.fraction_leaf_nodes_to_search_override > 0:
-            query["fractionLeafNodesToSearchOverride"] = environment.parsed_options.fraction_leaf_nodes_to_search_override
+        # Setup HTTP client if needed
+        if not self.use_psc or 'http' in getattr(self.environment.parsed_options, 'tags', []):
+            # Set up HTTP authentication
+            self.credentials, _ = google.auth.default(
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            self.auth_req = google.auth.transport.requests.Request()
+            self.credentials.refresh(self.auth_req)
+            self.headers = {
+                "Authorization": "Bearer " + self.credentials.token,
+                "Content-Type": "application/json",
+            }
             
-        self.request["queries"] = [query]
+            # Build the endpoint URL
+            self.public_endpoint_url = f"/v1/{self.index_endpoint_id}:findNeighbors"
+            
+            # Build the base request
+            self.request = {
+                "deployedIndexId": self.deployed_index_id,
+            }
+            
+            dp = {
+                "datapointId": "0",
+            }
+            query = {
+                "datapoint": dp,
+                "neighborCount": environment.parsed_options.num_neighbors,
+            }
+            
+            # Add optional parameters if specified
+            if environment.parsed_options.fraction_leaf_nodes_to_search_override > 0:
+                query["fractionLeafNodesToSearchOverride"] = environment.parsed_options.fraction_leaf_nodes_to_search_override
+                
+            self.request["queries"] = [query]
+            logging.info("HTTP client initialized")
+        
+        # Setup gRPC client if needed
+        if self.use_psc or 'grpc' in getattr(self.environment.parsed_options, 'tags', []):
+            # Get the PSC address from the config
+            self.match_grpc_address = config.get('MATCH_GRPC_ADDRESS', '')
+            
+            # Validate configuration
+            if not self.match_grpc_address:
+                raise ValueError("MATCH_GRPC_ADDRESS must be provided for PSC/gRPC connections")
+            
+            logging.info(f"Using PSC/gRPC address: {self.match_grpc_address}")
+                
+            # Create a gRPC channel with interceptor
+            channel = intercepted_cached_grpc_channel(
+                self.match_grpc_address,  # Using match_grpc_address directly
+                auth=False,  # PSC connections don't need auth
+                env=environment
+            )
+            
+            # Create the client
+            self.grpc_client = MatchServiceClient(
+                transport=match_transports_grpc.MatchServiceGrpcTransport(
+                    channel=channel
+                )
+            )
+            logging.info("gRPC client initialized")
+        
+        # Store parsed options needed for requests
+        self.num_neighbors = environment.parsed_options.num_neighbors
+        self.fraction_leaf_nodes_to_search_override = environment.parsed_options.fraction_leaf_nodes_to_search_override
 
     @task
-    def findNearestNeighbors(self):
-        """Execute a Vector Search query with random vector."""
+    @tag('http')
+    def http_find_neighbors(self):
+        """Execute a Vector Search query using HTTP."""
+        if not hasattr(self, 'request'):
+            return  # Skip if not in HTTP mode
+            
         # Generate a random vector of the right dimensionality
         self.request["queries"][0]["datapoint"]["featureVector"] = [
             random.randint(-1000000, 1000000)
@@ -300,69 +372,14 @@ class VectorSearchHttpLoadTester(FastHttpUser):
             elif response.status_code != 200:
                 # Mark failed responses
                 response.failure(f"Failed with status code: {response.status_code}, body: {response.text}")
-
-
-class VectorSearchGrpcLoadTester(User):
-    """User that connects to Vector Search private endpoint using gRPC over PSC."""
     
-    # Following the pattern from PscGrpcUser class
-    def __init__(self, environment: env.Environment):
-        # Set up QPS-based wait time if specified
-        user_qps = environment.parsed_options.qps_per_user
-        if user_qps > 0:
-            # Use constant throughput based on QPS setting
-            def wait_time_fn():
-                fn = wait_time.constant_throughput(user_qps)
-                return fn(self)
-            self.wait_time = wait_time_fn
-        
-        # Call parent initialization
-        super().__init__(environment)
-        
-        # Read technical parameters from config file
-        self.deployed_index_id = config.get('DEPLOYED_INDEX_ID')
-        self.index_endpoint_id = config.get('INDEX_ENDPOINT_ID')
-        self.project_id = config.get('PROJECT_ID')
-        self.dimensions = int(config.get('INDEX_DIMENSIONS', 768))
-        
-        # Get the PSC address from the config
-        self.match_grpc_address = config.get('MATCH_GRPC_ADDRESS', '')
-        
-        # Set host to match_grpc_address for consistency with PscGrpcUser pattern
-        if self.match_grpc_address:
-            # If no port is specified, add the default port
-            if ":" not in self.match_grpc_address:
-                self.match_grpc_address = f"{self.match_grpc_address}:10000"
-            # Set the host attribute to the same address
-            self.host = self.match_grpc_address
-        
-        # Validate configuration
-        if not self.match_grpc_address:
-            raise ValueError("MATCH_GRPC_ADDRESS must be provided for PSC/gRPC connections")
-        
-        logging.info(f"Using PSC/gRPC address: {self.match_grpc_address}")
-            
-        # Create a gRPC channel with interceptor, following the PscGrpcUser pattern
-        channel = intercepted_cached_grpc_channel(
-            self.match_grpc_address,  # Using match_grpc_address directly
-            auth=False,  # PSC connections don't need auth
-            env=environment
-        )
-        
-        # Create the client
-        self.client = MatchServiceClient(
-            transport=match_transports_grpc.MatchServiceGrpcTransport(
-                channel=channel
-            )
-        )
-        
-        # Store parsed options needed for requests
-        self.num_neighbors = environment.parsed_options.num_neighbors
-        self.fraction_leaf_nodes_to_search_override = environment.parsed_options.fraction_leaf_nodes_to_search_override
-
     @task
-    def findNearestNeighbors(self):
-        """Execute a Vector Search query with random vector using gRPC."""
+    @tag('grpc')
+    def grpc_find_neighbors(self):
+        """Execute a Vector Search query using gRPC."""
+        if not hasattr(self, 'grpc_client'):
+            return  # Skip if not in gRPC mode
+            
         # Create a datapoint for the request
         datapoint = IndexDatapoint(
             datapoint_id="0",
@@ -391,22 +408,7 @@ class VectorSearchGrpcLoadTester(User):
         
         # The interceptor will handle performance metrics automatically
         try:
-            response = self.client.find_neighbors(request)
+            response = self.grpc_client.find_neighbors(request)
         except Exception as e:
             logging.error(f"Error in gRPC call: {str(e)}")
             raise  # The interceptor will handle the error reporting
-
-
-# Only define one user class at module level
-if config.get('PSC_ENABLED', 'false').lower() in ('true', 'yes', '1'):
-    # Use GRPC user if PSC is enabled
-    # The actual name matters for Locust's class detection
-    class VectorSearchUser(VectorSearchGrpcLoadTester):
-        """PSC-enabled Vector Search user class"""
-        pass
-else:
-    # Use HTTP user if PSC is not enabled  
-    # The actual name matters for Locust's class detection
-    class VectorSearchUser(VectorSearchHttpLoadTester):
-        """HTTP Vector Search user class"""
-        pass

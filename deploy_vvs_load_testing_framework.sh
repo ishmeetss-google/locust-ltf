@@ -150,6 +150,17 @@ if [[ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" == "true" ]]; then
   [[ -n "$GKE_SERVICE_SUBNET_RANGE" ]] && echo "gke_service_subnet_range = \"$GKE_SERVICE_SUBNET_RANGE\"" >> terraform.tfvars
 fi
 
+# Determine the test type based on PSC_ENABLED
+if [ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" = "true" ]; then
+  export LOCUST_TEST_TYPE="grpc"
+  echo "Setting load test type to gRPC for PSC endpoint"
+else
+  export LOCUST_TEST_TYPE="http"
+  echo "Setting load test type to HTTP for public endpoint"
+fi
+
+# Add the test type to terraform.tfvars
+echo "locust_test_type = \"${LOCUST_TEST_TYPE}\"" >> terraform.tfvars
 
 # Initialize and apply just the vector search module
 terraform init

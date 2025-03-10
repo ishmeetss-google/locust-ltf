@@ -290,6 +290,17 @@ variable "image" {
   # No Default - User must provide the image for the locust load testing code.  
 }
 
+variable "locust_test_type" {
+  description = "The type of load test to run (http or grpc)"
+  type        = string
+  default     = "http"
+  
+  validation {
+    condition     = contains(["http", "grpc"], var.locust_test_type)
+    error_message = "The locust_test_type must be either 'http' or 'grpc'."
+  }
+}
+
 # Additional variables for GKE network configuration
 variable "subnetwork" {
   description = "The subnetwork to host the GKE cluster in (format: projects/{project}/regions/{region}/subnetworks/{subnetwork})"

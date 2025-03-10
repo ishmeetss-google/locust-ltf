@@ -93,6 +93,7 @@ module "gke_autopilot" {
   region         = var.region
   project_number = var.project_number
   image          = var.image
+  locust_test_type = var.locust_test_type
 
   # Pass network configuration for PSC support if enabled
   network = var.endpoint_enable_private_service_connect ? (
