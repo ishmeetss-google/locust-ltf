@@ -141,49 +141,78 @@ def intercepted_cached_grpc_channel(
     interceptor = LocustInterceptor(environment=env)
     return grpc.intercept_channel(channel, interceptor)
 
-# Helper function to load configuration from file
-def load_config():
-    config = {}
-    config_path = '/tasks/locust_config.env'
+# Create a global config class that will be used throughout the application
+class Config:
+    """Singleton configuration class that loads from config file just once."""
+    _instance = None
     
-    if os.path.exists(config_path):
-        with open(config_path, 'r') as f:
-            for line in f:
-                if '=' in line:
-                    key, value = line.strip().split('=', 1)
-                    config[key] = value
-        logging.info(f"Loaded configuration from {config_path}")
-    else:
-        logging.warning(f"Warning: Config file not found at {config_path}")
+    def __new__(cls, config_file_path=None):
+        if cls._instance is None:
+            cls._instance = super(Config, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
     
-    # Set default values if not in config
-    defaults = {
-        'INDEX_DIMENSIONS': '768',
-        'DEPLOYED_INDEX_ID': '',
-        'INDEX_ENDPOINT_ID': '',
-        'ENDPOINT_HOST': '',
-        'PROJECT_ID': '',
-        'PSC_ENABLED': 'false',
-        'MATCH_GRPC_ADDRESS': '',
-        'SERVICE_ATTACHMENT': '',
-        'PSC_IP_ADDRESS': ''
-    }
-    
-    for key, default in defaults.items():
-        if key not in config:
-            config[key] = default
+    def __init__(self, config_file_path=None):
+        if self._initialized:
+            return
             
-    # If we have PSC_IP_ADDRESS but not MATCH_GRPC_ADDRESS, construct it
-    if config.get('PSC_IP_ADDRESS') and not config.get('MATCH_GRPC_ADDRESS'):
-        config['MATCH_GRPC_ADDRESS'] = f"{config['PSC_IP_ADDRESS']}:10000"
+        if config_file_path:
+            self._load_config(config_file_path)
+        self._initialized = True
         
-    return config
+        logging.info(f"Loaded configuration: PSC_ENABLED={self.psc_enabled}, "
+                     f"MATCH_GRPC_ADDRESS={self.match_grpc_address}, "
+                     f"ENDPOINT_HOST={self.endpoint_host}")
+    
+    def _load_config(self, file_path):
+        """Load configuration from a bash-style config file."""
+        self.config = {}
+        
+        with open(file_path, 'r') as f:
+            for line in f:
+                # Skip comments and empty lines
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                
+                # Parse variable assignment
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip()
+                    
+                    # Remove surrounding quotes if present
+                    if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+                        value = value[1:-1]
+                    
+                    self.config[key] = value
+        
+        # Set attributes from the config
+        self.project_id = self.config.get('PROJECT_ID')
+        self.dimensions = int(self.config.get('INDEX_DIMENSIONS', 768))
+        self.deployed_index_id = self.config.get('DEPLOYED_INDEX_ID')
+        self.index_endpoint_id = self.config.get('INDEX_ENDPOINT_ID')
+        self.endpoint_host = self.config.get('ENDPOINT_HOST')
+        self.psc_enabled = self.config.get('PSC_ENABLED', 'false').lower() in ('true', 'yes', '1')
+        self.match_grpc_address = self.config.get('MATCH_GRPC_ADDRESS')
+        self.service_attachment = self.config.get('SERVICE_ATTACHMENT')
+        self.psc_ip_address = self.config.get('PSC_IP_ADDRESS')
+        self.sparse_embedding_num_dimensions = int(self.config.get('SPARSE_EMBEDDING_NUM_DIMENSIONS', 0))
+        self.sparse_embedding_num_dimensions_with_values = int(self.config.get('SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES', 0))
+        self.num_neighbors = int(self.config.get('NUM_NEIGHBORS', 20)) 
+        self.num_embeddings_per_request = int(self.config.get('NUM_EMBEDDINGS_PER_REQUEST', 1))
+        self.return_full_datapoint = self.config.get('RETURN_FULL_DATAPOINT', 'False').lower() in ('true', 'yes', '1')
+        
+        # If we have PSC_IP_ADDRESS but not MATCH_GRPC_ADDRESS, construct it
+        if self.psc_ip_address and not self.match_grpc_address:
+            self.match_grpc_address = f"{self.psc_ip_address}:10000"
+    
+    def get(self, key, default=None):
+        """Get a configuration value by key."""
+        return getattr(self, key.lower(), self.config.get(key, default))
 
-# Load configuration
-config = load_config()
-logging.info(f"Loaded configuration: PSC_ENABLED={config.get('PSC_ENABLED', 'false')}, "
-      f"MATCH_GRPC_ADDRESS={config.get('MATCH_GRPC_ADDRESS', '')}, "
-      f"ENDPOINT_HOST={config.get('ENDPOINT_HOST', '')}")
+# Load the config once at startup
+config = Config('./config.sh')
 
 @events.init_command_line_parser.add_listener
 def _(parser):
@@ -192,7 +221,7 @@ def _(parser):
     parser.add_argument(
         "--num-neighbors", 
         type=int, 
-        default=20, 
+        default=config.num_neighbors, 
         help="Number of nearest neighbors to find in each query"
     )
     
@@ -226,7 +255,7 @@ def _(parser):
 @events.init.add_listener
 def on_locust_init(environment, **kwargs):
     """Set up the host and tags based on configuration."""
-    is_psc_enabled = config.get('PSC_ENABLED', 'false').lower() in ('true', 'yes', '1')
+    is_psc_enabled = config.psc_enabled
     
     # Set default tags based on PSC mode if no tags were specified
     if hasattr(environment.parsed_options, 'tags') and not environment.parsed_options.tags:
@@ -241,13 +270,13 @@ def on_locust_init(environment, **kwargs):
     if not environment.host:
         if is_psc_enabled:
             # PSC/gRPC mode
-            grpc_address = config.get('MATCH_GRPC_ADDRESS', '')
+            grpc_address = config.match_grpc_address
             if grpc_address:
                 logging.info(f"Auto-setting host to gRPC address: {grpc_address}")
                 environment.host = grpc_address
         else:
             # HTTP mode
-            endpoint_host = config.get('ENDPOINT_HOST', '')
+            endpoint_host = config.endpoint_host
             if endpoint_host:
                 host = f"https://{endpoint_host}"
                 logging.info(f"Auto-setting host to HTTP endpoint: {host}")
@@ -269,14 +298,14 @@ class VectorSearchUser(User):
         # Call parent initialization
         super().__init__(environment)
         
-        # Read technical parameters from config file
-        self.deployed_index_id = config.get('DEPLOYED_INDEX_ID')
-        self.index_endpoint_id = config.get('INDEX_ENDPOINT_ID')
-        self.project_id = config.get('PROJECT_ID')
-        self.dimensions = int(config.get('INDEX_DIMENSIONS', 768))
+        # Read technical parameters from config instead of loading them again
+        self.deployed_index_id = config.deployed_index_id
+        self.index_endpoint_id = config.index_endpoint_id
+        self.project_id = config.project_id
+        self.dimensions = config.dimensions
         
         # Determine which mode we're running in based on PSC_ENABLED
-        self.use_psc = config.get('PSC_ENABLED', 'false').lower() in ('true', 'yes', '1')
+        self.use_psc = config.psc_enabled
         
         # Setup HTTP client if needed
         if not self.use_psc or 'http' in getattr(self.environment.parsed_options, 'tags', []):
@@ -299,25 +328,25 @@ class VectorSearchUser(User):
                 "deployedIndexId": self.deployed_index_id,
             }
             
-            dp = {
+            self.dp = {
                 "datapointId": "0",
             }
-            query = {
-                "datapoint": dp,
+            self.query = {
+                "datapoint": self.dp,
                 "neighborCount": environment.parsed_options.num_neighbors,
             }
             
             # Add optional parameters if specified
             if environment.parsed_options.fraction_leaf_nodes_to_search_override > 0:
-                query["fractionLeafNodesToSearchOverride"] = environment.parsed_options.fraction_leaf_nodes_to_search_override
+                self.query["fractionLeafNodesToSearchOverride"] = environment.parsed_options.fraction_leaf_nodes_to_search_override
                 
-            self.request["queries"] = [query]
+            self.request["queries"] = [self.query]
             logging.info("HTTP client initialized")
         
         # Setup gRPC client if needed
         if self.use_psc or 'grpc' in getattr(self.environment.parsed_options, 'tags', []):
             # Get the PSC address from the config
-            self.match_grpc_address = config.get('MATCH_GRPC_ADDRESS', '')
+            self.match_grpc_address = config.match_grpc_address
             
             # Validate configuration
             if not self.match_grpc_address:
@@ -351,11 +380,27 @@ class VectorSearchUser(User):
         if not hasattr(self, 'request'):
             return  # Skip if not in HTTP mode
             
-        # Generate a random vector of the right dimensionality
-        self.request["queries"][0]["datapoint"]["featureVector"] = [
-            random.randint(-1000000, 1000000)
-            for _ in range(self.dimensions)
-        ]
+        # Handle sparse embedding case
+        if (config.sparse_embedding_num_dimensions > 0 and
+            config.sparse_embedding_num_dimensions_with_values > 0 and
+            config.sparse_embedding_num_dimensions_with_values <= config.sparse_embedding_num_dimensions):
+            
+            self.request["queries"][0]["datapoint"]["sparseEmbedding"] = {
+                "values": [
+                    random.randint(-1000000, 1000000)
+                    for _ in range(config.sparse_embedding_num_dimensions_with_values)
+                ],
+                "dimensions": random.sample(
+                    range(config.sparse_embedding_num_dimensions),
+                    config.sparse_embedding_num_dimensions_with_values
+                )
+            }
+        else:
+            # Standard feature vector case
+            self.request["queries"][0]["datapoint"]["featureVector"] = [
+                random.randint(-1000000, 1000000)
+                for _ in range(self.dimensions)
+            ]
         
         # Send the request and handle the response
         with self.client.request(
@@ -380,15 +425,34 @@ class VectorSearchUser(User):
         if not hasattr(self, 'grpc_client'):
             return  # Skip if not in gRPC mode
             
-        # Create a datapoint for the request
-        datapoint = IndexDatapoint(
-            datapoint_id="0",
-            feature_vector=[
-                random.randint(-1000000, 1000000)
-                for _ in range(self.dimensions)
-            ]
-        )
-        
+        # Create datapoint based on embedding type
+        if (config.sparse_embedding_num_dimensions > 0 and
+            config.sparse_embedding_num_dimensions_with_values > 0 and
+            config.sparse_embedding_num_dimensions_with_values <= config.sparse_embedding_num_dimensions):
+            # Sparse embedding case
+            dimensions = random.sample(
+                range(config.sparse_embedding_num_dimensions),
+                config.sparse_embedding_num_dimensions_with_values
+            )
+            values = [random.uniform(-1, 1) 
+                     for _ in range(config.sparse_embedding_num_dimensions_with_values)]
+            datapoint = IndexDatapoint(
+                datapoint_id='0',
+                sparse_embedding={
+                    'dimensions': dimensions,
+                    'values': values
+                }
+            )
+        else:
+            # Dense embedding case
+            datapoint = IndexDatapoint(
+                datapoint_id="0",
+                feature_vector=[
+                    random.randint(-1000000, 1000000)
+                    for _ in range(self.dimensions)
+                ]
+            )
+
         # Create a query
         query = FindNeighborsRequest.Query(
             datapoint=datapoint,

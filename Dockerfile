@@ -4,7 +4,7 @@ FROM locustio/locust
 WORKDIR /tasks
 
 # Copy Locust task file
-COPY locust_tests/public_http_query.py ./
+COPY locust_tests/locust.py ./
 
 # Install dependencies
 RUN pip install -U \
