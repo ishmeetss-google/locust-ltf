@@ -128,7 +128,7 @@ resource "kubernetes_deployment" "locust_worker" {
             mount_path = "/tasks/locust_config.env"
             sub_path   = "locust_config.env"
           }
-          args = ["-f", "/tasks/public_http_query.py", "--worker", "--master-host", "locust-master"]
+          args = ["-f", "/tasks/locust.py", "--worker", "--master-host", "locust-master"]
           resources {
             requests = {
               cpu = "1000m"

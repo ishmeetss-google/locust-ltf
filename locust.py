@@ -171,14 +171,14 @@ def load_config():
             
     # If we have PSC_IP_ADDRESS but not MATCH_GRPC_ADDRESS, construct it
     if config.get('PSC_IP_ADDRESS') and not config.get('MATCH_GRPC_ADDRESS'):
-        config['MATCH_GRPC_ADDRESS'] = f"{config['PSC_IP_ADDRESS']}:8443"
-        
+        config['MATCH_GRPC_ADDRESS'] = f"{config['PSC_IP_ADDRESS']}:10000"  
     return config
 
 # Load configuration
 config = load_config()
 print(f"Loaded configuration: PSC_ENABLED={config.get('PSC_ENABLED', 'false')}, "
-      f"MATCH_GRPC_ADDRESS={config.get('MATCH_GRPC_ADDRESS', '')}")
+      f"MATCH_GRPC_ADDRESS={config.get('MATCH_GRPC_ADDRESS', '')}, "
+      f"ENDPOINT_HOST={config.get('ENDPOINT_HOST', '')}")
 
 @events.init_command_line_parser.add_listener
 def _(parser):
@@ -210,9 +210,12 @@ def _(parser):
         help="Advanced: Fraction of leaf nodes to search (0.0-1.0). Higher values increase recall but reduce performance."
     )
 
-
-class HttpVectorSearchUser(FastHttpUser):
+# Put a name-unique version at module level
+class VectorSearchHttpLoadTester(FastHttpUser):
     """User that connects to Vector Search public endpoint using HTTP."""
+    
+    # Set default host to avoid the error
+    host = "https://placeholder.com"
     
     def __init__(self, environment: env.Environment):
         # Set up QPS-based wait time if specified
@@ -224,6 +227,13 @@ class HttpVectorSearchUser(FastHttpUser):
                 return fn(self)
             self.wait_time = wait_time_fn
             
+        # Set the host from config before calling parent init
+        endpoint_host = config.get("ENDPOINT_HOST")
+        if endpoint_host:
+            self.host = f'https://{endpoint_host}'
+            
+        logging.info(f"Using HTTP host: {self.host}")
+        
         # Call parent initialization
         super().__init__(environment)
         
@@ -232,9 +242,6 @@ class HttpVectorSearchUser(FastHttpUser):
         self.index_endpoint_id = config.get('INDEX_ENDPOINT_ID')
         self.project_id = config.get('PROJECT_ID')
         self.dimensions = int(config.get('INDEX_DIMENSIONS', 768))
-        
-        # Set the host from config
-        self.host = f'https://{config.get("ENDPOINT_HOST")}'
         
         # Set up authentication
         self.credentials, _ = google.auth.default(
@@ -295,9 +302,10 @@ class HttpVectorSearchUser(FastHttpUser):
                 response.failure(f"Failed with status code: {response.status_code}, body: {response.text}")
 
 
-class GrpcVectorSearchUser(User):
+class VectorSearchGrpcLoadTester(User):
     """User that connects to Vector Search private endpoint using gRPC over PSC."""
     
+    # Following the pattern from PscGrpcUser class
     def __init__(self, environment: env.Environment):
         # Set up QPS-based wait time if specified
         user_qps = environment.parsed_options.qps_per_user
@@ -317,22 +325,26 @@ class GrpcVectorSearchUser(User):
         self.project_id = config.get('PROJECT_ID')
         self.dimensions = int(config.get('INDEX_DIMENSIONS', 768))
         
-        # Get the gRPC address from the config
+        # Get the PSC address from the config
         self.match_grpc_address = config.get('MATCH_GRPC_ADDRESS', '')
         
-        # If MATCH_GRPC_ADDRESS doesn't include a port, add the default port 8443
-        if self.match_grpc_address and ":" not in self.match_grpc_address:
-            self.match_grpc_address = f"{self.match_grpc_address}:8443"
-            logging.info(f"Added default port 8443 to MATCH_GRPC_ADDRESS: {self.match_grpc_address}")
+        # Set host to match_grpc_address for consistency with PscGrpcUser pattern
+        if self.match_grpc_address:
+            # If no port is specified, add the default port
+            if ":" not in self.match_grpc_address:
+                self.match_grpc_address = f"{self.match_grpc_address}:10000"
+            # Set the host attribute to the same address
+            self.host = self.match_grpc_address
         
+        # Validate configuration
         if not self.match_grpc_address:
             raise ValueError("MATCH_GRPC_ADDRESS must be provided for PSC/gRPC connections")
         
         logging.info(f"Using PSC/gRPC address: {self.match_grpc_address}")
             
-        # Create a gRPC channel with interceptor
+        # Create a gRPC channel with interceptor, following the PscGrpcUser pattern
         channel = intercepted_cached_grpc_channel(
-            self.match_grpc_address,
+            self.match_grpc_address,  # Using match_grpc_address directly
             auth=False,  # PSC connections don't need auth
             env=environment
         )
@@ -377,6 +389,7 @@ class GrpcVectorSearchUser(User):
             queries=[query]
         )
         
+        # The interceptor will handle performance metrics automatically
         try:
             response = self.client.find_neighbors(request)
         except Exception as e:
@@ -384,7 +397,16 @@ class GrpcVectorSearchUser(User):
             raise  # The interceptor will handle the error reporting
 
 
-# Determine which user class to use based on configuration
-psc_enabled = config.get('PSC_ENABLED', 'false').lower() in ('true', 'yes', '1')
-UserClass = GrpcVectorSearchUser if psc_enabled else HttpVectorSearchUser
-logging.info(f"Selected user class: {UserClass.__name__} (PSC Enabled: {psc_enabled})")
+# Only define one user class at module level
+if config.get('PSC_ENABLED', 'false').lower() in ('true', 'yes', '1'):
+    # Use GRPC user if PSC is enabled
+    # The actual name matters for Locust's class detection
+    class VectorSearchUser(VectorSearchGrpcLoadTester):
+        """PSC-enabled Vector Search user class"""
+        pass
+else:
+    # Use HTTP user if PSC is not enabled  
+    # The actual name matters for Locust's class detection
+    class VectorSearchUser(VectorSearchHttpLoadTester):
+        """HTTP Vector Search user class"""
+        pass

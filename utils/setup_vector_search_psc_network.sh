@@ -68,14 +68,25 @@ gcloud compute firewall-rules create allow-health-checks-$VPC_NAME \
     --source-ranges=35.191.0.0/16,130.211.0.0/22 \
     --target-tags=vertex-endpoint
 
-# Create Service Connection Policy
-echo "Creating service connection policy..."
-gcloud network-connectivity service-connection-policies create $PSC_POLICY_NAME \
+# Allow traffic from GKE to Vertex AI
+gcloud compute firewall-rules create allow-gke-to-vertex-$VPC_NAME \
     --project=$PROJECT_ID \
-    --network=projects/$PROJECT_ID/global/networks/$VPC_NAME \
-    --service-class=gcp-vertexai \
-    --region=$REGION \
-    --subnets=$SUBNET_NAME
+    --network=$VPC_NAME \
+    --action=ALLOW \
+    --rules=tcp:443,tcp:8080-8090,tcp:8443 \
+    --priority=1000 \
+    --source-tags=gke-cluster \
+    --target-tags=vertex-endpoint
+
+# Also add a specific rule for the PSC connection for Vector Search
+gcloud compute firewall-rules create allow-psc-for-vector-search \
+    --project=$PROJECT_ID \
+    --network=$VPC_NAME \
+    --action=ALLOW \
+    --rules=tcp:443,tcp:8080-8090,tcp:8443,tcp:10000
+    --priority=1000 \
+    --source-ranges=$SUBNET_RANGE \
+    --destination-ranges=0.0.0.0/0
 
 echo ""
 echo "Setup complete!"
