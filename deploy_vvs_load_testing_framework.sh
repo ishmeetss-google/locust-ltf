@@ -205,11 +205,11 @@ export VS_DEPLOYED_INDEX_ID=$(terraform output -raw vector_search_deployed_index
 export VS_INDEX_ENDPOINT_ID=$(terraform output -raw vector_search_endpoint_id)
 # Get the public endpoint but handle null values
 VS_PUBLIC_ENDPOINT=$(terraform output vector_search_public_endpoint | tr -d '"')
-if [[ "$VS_PUBLIC_ENDPOINT" == "null" || -z "$VS_PUBLIC_ENDPOINT" ]]; then
+if [[ "${VS_PUBLIC_ENDPOINT}" == "null" || -z "${VS_PUBLIC_ENDPOINT}" ]]; then
     echo "Public endpoint is not available (expected with PSC enabled)"
     export VS_ENDPOINT_HOST=""
 else
-    export VS_ENDPOINT_HOST="$VS_PUBLIC_ENDPOINT"
+    export VS_ENDPOINT_HOST="${VS_PUBLIC_ENDPOINT}"
 fi
 
 
