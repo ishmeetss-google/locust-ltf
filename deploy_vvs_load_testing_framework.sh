@@ -230,6 +230,7 @@ else
     ENDPOINT_HOST=${VS_ENDPOINT_HOST}
     PROJECT_ID=${PROJECT_ID}
 EOF
+fi
 
 # Extract PSC-specific values if PSC is enabled
 if [[ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" == "true" ]]; then

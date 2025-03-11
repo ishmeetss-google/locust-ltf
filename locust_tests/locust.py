@@ -19,7 +19,6 @@ import locust
 from locust import between, env, FastHttpUser, User, task, events, wait_time, tag
 import logging
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
 # Patch grpc so that it uses gevent instead of asyncio
@@ -212,7 +211,7 @@ class Config:
         return getattr(self, key.lower(), self.config.get(key, default))
 
 # Load the config once at startup
-config = Config('./config.sh')
+config = Config('./locust_config.env')
 
 @events.init_command_line_parser.add_listener
 def _(parser):
