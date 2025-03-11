@@ -204,7 +204,7 @@ class Config:
         
         # If we have PSC_IP_ADDRESS but not MATCH_GRPC_ADDRESS, construct it
         if self.psc_ip_address and not self.match_grpc_address:
-            self.match_grpc_address = f"{self.psc_ip_address}:10000"
+            self.match_grpc_address = f"{self.psc_ip_address}"
     
     def get(self, key, default=None):
         """Get a configuration value by key."""
@@ -241,14 +241,6 @@ def _(parser):
         type=float,
         default=0.0,
         help="Advanced: Fraction of leaf nodes to search (0.0-1.0). Higher values increase recall but reduce performance."
-    )
-    
-    # Add auto-host flag
-    parser.add_argument(
-        "--auto-host",
-        action="store_true",
-        default=True,
-        help="Automatically set host based on PSC configuration"
     )
 
 @events.init.add_listener

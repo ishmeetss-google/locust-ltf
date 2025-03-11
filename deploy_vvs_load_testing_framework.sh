@@ -246,16 +246,29 @@ if [[ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" == "true" ]]; then
   export VS_PSC_ENABLED=true
   export VS_SERVICE_ATTACHMENT=$(terraform output -raw vector_search_service_attachment)
   
-  # Check if psc_address_ip exists in terraform output
+  # Get PSC IP address if available
   if terraform output -raw psc_address_ip &>/dev/null; then
     export VS_PSC_IP=$(terraform output -raw psc_address_ip)
-    # Set the MATCH_GRPC_ADDRESS using the PSC IP (without adding port)
-    export VS_MATCH_GRPC_ADDRESS="${VS_PSC_IP}"
+    # Add port for the connection
+    export VS_PSC_IP_WITH_PORT="${VS_PSC_IP}:10000"
     echo "PSC IP Address: ${VS_PSC_IP}"
-    echo "MATCH_GRPC_ADDRESS set to: ${VS_MATCH_GRPC_ADDRESS}"
   else
     echo "Warning: psc_address_ip not found in terraform output"
-    export VS_MATCH_GRPC_ADDRESS=$(terraform output -raw vector_search_match_grpc_address || echo "")
+  fi
+  
+  # Try to get match_grpc_address separately
+  if terraform output -raw vector_search_match_grpc_address &>/dev/null; then
+    match_raw=$(terraform output -raw vector_search_match_grpc_address)
+    # Add port if not already present
+    if [[ "$match_raw" != *":"* && -n "$match_raw" ]]; then
+      export VS_MATCH_GRPC_ADDRESS="${match_raw}:10000"
+    else
+      export VS_MATCH_GRPC_ADDRESS="$match_raw"
+    fi
+    echo "MATCH_GRPC_ADDRESS from Terraform: ${VS_MATCH_GRPC_ADDRESS}"
+  else
+    echo "Note: vector_search_match_grpc_address not available from Terraform"
+    export VS_MATCH_GRPC_ADDRESS=""
   fi
   
   cd ..
@@ -264,12 +277,14 @@ if [[ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" == "true" ]]; then
   echo "PSC_ENABLED=true" >> config/locust_config.env
   echo "SERVICE_ATTACHMENT=${VS_SERVICE_ATTACHMENT}" >> config/locust_config.env
   
-  # Add MATCH_GRPC_ADDRESS - this is the most important part for PSC
-  echo "MATCH_GRPC_ADDRESS=${VS_MATCH_GRPC_ADDRESS}" >> config/locust_config.env
+  # Add MATCH_GRPC_ADDRESS if available from Terraform
+  if [[ -n "${VS_MATCH_GRPC_ADDRESS}" ]]; then
+    echo "MATCH_GRPC_ADDRESS=${VS_MATCH_GRPC_ADDRESS}" >> config/locust_config.env
+  fi
   
-  # Add PSC IP if available
+  # Add PSC_IP_ADDRESS with port
   if [[ -n "${VS_PSC_IP}" ]]; then
-    echo "PSC_IP_ADDRESS=${VS_PSC_IP}" >> config/locust_config.env
+    echo "PSC_IP_ADDRESS=${VS_PSC_IP_WITH_PORT}" >> config/locust_config.env
   fi
 else
   echo "PSC_ENABLED=false" >> config/locust_config.env
