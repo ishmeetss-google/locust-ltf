@@ -203,7 +203,14 @@ echo "Extracting Vector Search configuration..."
 export VS_DIMENSIONS=${INDEX_DIMENSIONS}
 export VS_DEPLOYED_INDEX_ID=$(terraform output -raw vector_search_deployed_index_id)
 export VS_INDEX_ENDPOINT_ID=$(terraform output -raw vector_search_endpoint_id)
-export VS_ENDPOINT_HOST=$(terraform output -raw vector_search_public_endpoint)
+# Get the public endpoint but handle null values
+VS_PUBLIC_ENDPOINT=$(terraform output vector_search_public_endpoint | tr -d '"')
+if [[ "$VS_PUBLIC_ENDPOINT" == "null" || -z "$VS_PUBLIC_ENDPOINT" ]]; then
+    echo "Public endpoint is not available (expected with PSC enabled)"
+    export VS_ENDPOINT_HOST=""
+else
+    export VS_ENDPOINT_HOST="$VS_PUBLIC_ENDPOINT"
+fi
 
 
 # Save these to a temporary file for Docker build
@@ -230,6 +237,7 @@ else
     ENDPOINT_HOST=${VS_ENDPOINT_HOST}
     PROJECT_ID=${PROJECT_ID}
 EOF
+fi
 
 # Extract PSC-specific values if PSC is enabled
 if [[ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" == "true" ]]; then
