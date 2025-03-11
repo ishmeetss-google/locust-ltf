@@ -50,9 +50,17 @@ export need_external_ip
 
 echo "External IP requested status =" $need_external_ip
 
-# Ask about blended vs single search
-read -r -p "Does your deployed index contain sparse and dense embeddings? (y/n): " blended_search 
-export blended_search
+# Automatically determine blended_search based on sparse embedding config
+if [[ -n "$SPARSE_EMBEDDING_NUM_DIMENSIONS" && -n "$SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES" && \
+      "$SPARSE_EMBEDDING_NUM_DIMENSIONS" -gt 0 && "$SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES" -gt 0 ]]; then
+    export blended_search="y"
+    echo "Detected sparse embedding configuration - using blended search mode"
+else
+    export blended_search="n"
+    echo "No sparse embedding configuration detected - using standard search mode"
+fi
+
+echo "Blended search status = $blended_search"
 
 echo "Blended search requested status =" $blended_search
 
