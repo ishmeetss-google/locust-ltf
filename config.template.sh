@@ -7,6 +7,10 @@ PROJECT_ID="your-project-id"
 REGION="us-central1"
 ZONE="us-central1-a"
 INDEX_DIMENSIONS=768
+INDEX_DIMENSIONS=768
+# DEPLOYMENT_ID: Unique identifier for the resources deployed in this run
+# Format: [a-z0-9][-a-z0-9]* (must start with letter/number, can contain underscores)
+DEPLOYMENT_ID="identifer-for-deployed-resources"
 
 # Set one of these options:
 # Option 1: Use existing index
