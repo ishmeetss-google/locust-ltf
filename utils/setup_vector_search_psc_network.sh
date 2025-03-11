@@ -92,7 +92,12 @@ else
   echo "Firewall rule allow-health-checks-$VPC_NAME already exists"
 fi
 
-# Also add a specific rule for the PSC connection for Vector Search
+# Note about the PSC firewall rule being managed by Terraform
+echo "NOTE: The 'allow-psc-for-vector-search' firewall rule will be created by Terraform."
+echo "If you need to create it manually, please uncomment the code below."
+
+# PSC firewall rule commented out since it will be managed by Terraform
+: '
 if ! gcloud compute firewall-rules describe allow-psc-for-vector-search --project=$PROJECT_ID &>/dev/null; then
   echo "Creating allow-psc-for-vector-search firewall rule..."
   gcloud compute firewall-rules create allow-psc-for-vector-search \
@@ -106,6 +111,7 @@ if ! gcloud compute firewall-rules describe allow-psc-for-vector-search --projec
 else
   echo "Firewall rule allow-psc-for-vector-search already exists"
 fi
+'
 
 echo ""
 echo "Setup complete!"

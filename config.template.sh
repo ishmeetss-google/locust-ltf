@@ -12,6 +12,10 @@ INDEX_DIMENSIONS=768
 # Format: [a-z0-9][-a-z0-9]* (must start with letter/number, can contain underscores)
 DEPLOYMENT_ID="identifer-for-deployed-resources"
 
+# Sparse embedding configuration (for hybrid search)
+SPARSE_EMBEDDING_NUM_DIMENSIONS=0           # Set to a positive value for sparse embeddings
+SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES=0  # Number of non-zero values
+
 # Set one of these options:
 # Option 1: Use existing index
 VECTOR_SEARCH_INDEX_ID=""  # e.g. "projects/PROJECT_ID/locations/REGION/indexes/4705835000090591232"

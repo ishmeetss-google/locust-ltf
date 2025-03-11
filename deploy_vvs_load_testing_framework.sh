@@ -51,19 +51,17 @@ export need_external_ip
 echo "External IP requested status =" $need_external_ip
 
 # Automatically determine blended_search based on sparse embedding config
-if [[ -n "$SPARSE_EMBEDDING_NUM_DIMENSIONS" && -n "$SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES" && \
-      "$SPARSE_EMBEDDING_NUM_DIMENSIONS" -gt 0 && "$SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES" -gt 0 ]]; then
+# Automatically determine blended_search based on sparse embedding config
+if [[ -v SPARSE_EMBEDDING_NUM_DIMENSIONS && -v SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES && \
+      ${SPARSE_EMBEDDING_NUM_DIMENSIONS:-0} -gt 0 && ${SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES:-0} -gt 0 ]]; then
     export blended_search="y"
     echo "Detected sparse embedding configuration - using blended search mode"
 else
-    export blended_search="n"
+    export blended_search="n" 
     echo "No sparse embedding configuration detected - using standard search mode"
 fi
 
 echo "Blended search status = $blended_search"
-
-echo "Blended search requested status =" $blended_search
-
 
 # Enable required services
 echo "Enabling required Google Cloud services..."
@@ -223,27 +221,27 @@ fi
 
 # Save these to a temporary file for Docker build
 cd ..
-if [[ -n "$blended_search" ]]; then
-    cat <<EOF > config/locust_config.env
-    INDEX_DIMENSIONS=${VS_DIMENSIONS}
-    DEPLOYED_INDEX_ID=${VS_DEPLOYED_INDEX_ID}
-    INDEX_ENDPOINT_ID=${VS_INDEX_ENDPOINT_ID}
-    ENDPOINT_HOST=${VS_ENDPOINT_HOST}
-    PROJECT_ID=${PROJECT_ID}
-    SPARSE_EMBEDDING_NUM_DIMENSIONS=10000
-    SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES=200
-    NUM_NEIGHBORS=20
-    DENSE_EMBEDDING_NUM_DIMENSIONS=768
-    RETURN_FULL_DATAPOINT=False
-    NUM_EMBEDDINGS_PER_REQUEST=50
+if [[ "$blended_search" == "y" ]]; then
+cat <<EOF > config/locust_config.env
+INDEX_DIMENSIONS=${VS_DIMENSIONS}
+DEPLOYED_INDEX_ID=${VS_DEPLOYED_INDEX_ID}
+INDEX_ENDPOINT_ID=${VS_INDEX_ENDPOINT_ID}
+ENDPOINT_HOST=${VS_ENDPOINT_HOST}
+PROJECT_ID=${PROJECT_ID}
+SPARSE_EMBEDDING_NUM_DIMENSIONS=${SPARSE_EMBEDDING_NUM_DIMENSIONS}
+SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES=${SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES}
+NUM_NEIGHBORS=20
+DENSE_EMBEDDING_NUM_DIMENSIONS=${VS_DIMENSIONS}
+RETURN_FULL_DATAPOINT=False
+NUM_EMBEDDINGS_PER_REQUEST=50
 EOF
 else
-    cat <<EOF > config/locust_config.env
-    INDEX_DIMENSIONS=${VS_DIMENSIONS}
-    DEPLOYED_INDEX_ID=${VS_DEPLOYED_INDEX_ID}
-    INDEX_ENDPOINT_ID=${VS_INDEX_ENDPOINT_ID}
-    ENDPOINT_HOST=${VS_ENDPOINT_HOST}
-    PROJECT_ID=${PROJECT_ID}
+cat <<EOF > config/locust_config.env
+INDEX_DIMENSIONS=${VS_DIMENSIONS}
+DEPLOYED_INDEX_ID=${VS_DEPLOYED_INDEX_ID}
+INDEX_ENDPOINT_ID=${VS_INDEX_ENDPOINT_ID}
+ENDPOINT_HOST=${VS_ENDPOINT_HOST}
+PROJECT_ID=${PROJECT_ID}
 EOF
 fi
 

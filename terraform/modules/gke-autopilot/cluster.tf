@@ -138,7 +138,7 @@ resource "google_compute_firewall" "allow_psc_ingress" {
   # Allow from GKE to the Vector Search PSC
   allow {
     protocol = "tcp"
-    ports    = ["443", "8080-8090"] # Ports used by Vector Search
+    ports    = ["443", "8080-8090", "10000"] # Ports used by Vector Search
   }
 
   # Source is all IP ranges used by GKE
