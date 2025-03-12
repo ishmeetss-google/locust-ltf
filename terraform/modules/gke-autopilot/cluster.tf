@@ -93,6 +93,20 @@ resource "google_container_cluster" "ltf_autopilot_cluster" {
     }
   }
 
+    # Add this new block to configure master authorized networks
+  dynamic "master_authorized_networks_config" {
+    for_each = var.use_private_endpoint ? [1] : []
+    content {
+      # This enables master authorized networks control
+      # Without specifying any networks, access is blocked from everywhere
+      # You need to add at least one CIDR range that should have access
+      cidr_blocks {
+        cidr_block   = "10.0.0.0/8"  # This allows access from your VPC network
+        display_name = "VPC Networks"
+      }
+    }
+  }
+
   # IP allocation policy for GKE with PSC
   dynamic "ip_allocation_policy" {
     for_each = var.enable_psc_support ? [1] : []

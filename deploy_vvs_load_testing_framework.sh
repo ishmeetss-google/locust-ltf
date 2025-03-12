@@ -17,56 +17,28 @@ TIMESTAMP=$(date +%Y%m%d%H%M%S)
 DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo/locust-load-test:LTF-${TIMESTAMP}"
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 
-# Map the endpoint access type to Terraform variables
-case "${ENDPOINT_ACCESS_TYPE}" in
-  "public")
-    # Set endpoint_access variable for Terraform
-    export TF_VAR_endpoint_access='{"type":"public"}'
-    export LOCUST_TEST_TYPE="http"
-    echo "Configuring public endpoint access with HTTP tests"
-    ;;
-  "private_vpc")
-    export TF_VAR_endpoint_access='{"type":"private_vpc"}'
-    export LOCUST_TEST_TYPE="http"
-    echo "Configuring private VPC endpoint access with HTTP tests"
-    ;;
-  "private_service_connect")
-    export TF_VAR_endpoint_access='{"type":"private_service_connect"}'
-    export LOCUST_TEST_TYPE="grpc"
-    echo "Configuring Private Service Connect endpoint access with gRPC tests"
-    ;;
-  *)
-    echo "ERROR: Invalid ENDPOINT_ACCESS_TYPE. Must be one of: 'public', 'private_vpc', or 'private_service_connect'"
-    exit 1
-    ;;
-esac
+# Set test type based on endpoint access type (simplified)
+if [[ "${ENDPOINT_ACCESS_TYPE}" == "private_service_connect" ]]; then
+  export LOCUST_TEST_TYPE="grpc"
+  echo "Configuring Private Service Connect endpoint access with gRPC tests"
+else
+  export LOCUST_TEST_TYPE="http"
+  echo "Configuring ${ENDPOINT_ACCESS_TYPE} endpoint access with HTTP tests"
+fi
 
-# Configure network settings object for Terraform
+# Export the endpoint access type directly
+export TF_VAR_endpoint_access="{\"type\":\"${ENDPOINT_ACCESS_TYPE}\"}"
+
+# Configure simplified network settings
 NETWORK_CONFIG="{\"network_name\":\"${NETWORK_NAME:-default}\""
-
-# Add optional network configuration if provided
 [[ -n "${SUBNETWORK}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"subnetwork\":\"${SUBNETWORK}\""
 [[ -n "${MASTER_IPV4_CIDR_BLOCK}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"master_ipv4_cidr_block\":\"${MASTER_IPV4_CIDR_BLOCK}\""
 [[ -n "${GKE_POD_SUBNET_RANGE}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"pod_subnet_range\":\"${GKE_POD_SUBNET_RANGE}\""
 [[ -n "${GKE_SERVICE_SUBNET_RANGE}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"service_subnet_range\":\"${GKE_SERVICE_SUBNET_RANGE}\""
-
-# Close the JSON object
 NETWORK_CONFIG="${NETWORK_CONFIG}}"
 export TF_VAR_network_configuration="${NETWORK_CONFIG}"
 
-# For backward compatibility, also set the legacy variables
-if [[ "${ENDPOINT_ACCESS_TYPE}" == "public" ]]; then
-  export ENDPOINT_PUBLIC_ENDPOINT_ENABLED=true
-  export ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT=false
-elif [[ "${ENDPOINT_ACCESS_TYPE}" == "private_vpc" ]]; then
-  export ENDPOINT_PUBLIC_ENDPOINT_ENABLED=false
-  export ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT=false
-elif [[ "${ENDPOINT_ACCESS_TYPE}" == "private_service_connect" ]]; then
-  export ENDPOINT_PUBLIC_ENDPOINT_ENABLED=false
-  export ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT=true
-fi
-
-# Determine if blended search is enabled based on sparse embedding configuration
+# Determine if blended search is enabled (simplified)
 if [[ -v SPARSE_EMBEDDING_NUM_DIMENSIONS && -v SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES ]]; then
   export blended_search="y"
   echo "Sparse embedding configuration detected - using blended search mode"
@@ -181,7 +153,7 @@ deployed_index_dedicated_machine_type = "${DEPLOYED_INDEX_DEDICATED_MACHINE_TYPE
 image = "${DOCKER_IMAGE}"
 EOF
 
-# Add optional settings if defined
+# Add optional settings if defined (simplified)
 [[ -n "$INDEX_DISPLAY_NAME" ]] && echo "index_display_name = \"$INDEX_DISPLAY_NAME\"" >> terraform.tfvars
 [[ -n "$INDEX_DESCRIPTION" ]] && echo "index_description = \"$INDEX_DESCRIPTION\"" >> terraform.tfvars
 [[ -n "$INDEX_LABELS" ]] && echo "index_labels = $INDEX_LABELS" >> terraform.tfvars
@@ -211,30 +183,26 @@ EOF
 [[ -n "$DEPLOYED_INDEX_UPDATE_TIMEOUT" ]] && echo "deployed_index_update_timeout = \"$DEPLOYED_INDEX_UPDATE_TIMEOUT\"" >> terraform.tfvars
 [[ -n "$DEPLOYED_INDEX_DELETE_TIMEOUT" ]] && echo "deployed_index_delete_timeout = \"$DEPLOYED_INDEX_DELETE_TIMEOUT\"" >> terraform.tfvars
 
-# Display terraform.tfvars for verification
-echo "Contents of terraform.tfvars:"
-cat terraform.tfvars
-
 # Initialize and apply just the vector search module
 terraform init
 
 echo "Deploying vector search in the Terraform workspace: $DEPLOYMENT_ID"
 terraform apply -target=module.vector_search --auto-approve
 
-# Extract crucial values from Terraform output
+# Extract crucial values from Terraform output (simplified error handling)
 echo "Extracting Vector Search configuration..."
 export VS_DIMENSIONS=${INDEX_DIMENSIONS}
 export VS_DEPLOYED_INDEX_ID=$(terraform output -raw vector_search_deployed_index_id)
 export VS_INDEX_ENDPOINT_ID=$(terraform output -raw vector_search_endpoint_id)
 
-# Get the public endpoint but handle null values 
-# Note: Using public_endpoint_domain_name instead of public_endpoint
-VS_PUBLIC_ENDPOINT=$(terraform output vector_search_public_endpoint | tr -d '"')
-if [[ "${VS_PUBLIC_ENDPOINT}" == "null" || -z "${VS_PUBLIC_ENDPOINT}" ]]; then
-    echo "Public endpoint is not available (expected with private endpoints)"
-    export VS_ENDPOINT_HOST=""
+# Get public endpoint reliably without generating errors
+if terraform output -raw vector_search_public_endpoint &>/dev/null; then
+  VS_PUBLIC_ENDPOINT=$(terraform output -raw vector_search_public_endpoint)
+  export VS_ENDPOINT_HOST="${VS_PUBLIC_ENDPOINT}"
+  echo "Public endpoint is available at: ${VS_PUBLIC_ENDPOINT}"
 else
-    export VS_ENDPOINT_HOST="${VS_PUBLIC_ENDPOINT}"
+  echo "Public endpoint is not available (expected with private endpoints)"
+  export VS_ENDPOINT_HOST=""
 fi
 
 # Save these to a temporary file for Docker build
@@ -266,46 +234,58 @@ if [[ "${ENDPOINT_ACCESS_TYPE}" == "private_service_connect" ]]; then
   echo "Extracting PSC configuration..."
   cd terraform
   export VS_PSC_ENABLED=true
-  export VS_SERVICE_ATTACHMENT=$(terraform output -raw vector_search_service_attachment)
   
-  # Get PSC IP address if available
+  # Initialize variables
+  VS_SERVICE_ATTACHMENT=""
+  VS_PSC_IP=""
+  VS_PSC_IP_WITH_PORT=""
+  VS_MATCH_GRPC_ADDRESS=""
+  
+  # Get service attachment
+  if terraform output -raw vector_search_service_attachment &>/dev/null; then
+    VS_SERVICE_ATTACHMENT=$(terraform output -raw vector_search_service_attachment)
+    echo "Service Attachment: ${VS_SERVICE_ATTACHMENT}"
+  else
+    echo "Warning: service_attachment not found in terraform output"
+  fi
+  
+  # Get PSC IP address
   if terraform output -raw psc_address_ip &>/dev/null; then
-    export VS_PSC_IP=$(terraform output -raw psc_address_ip)
-    # Add port for the connection
-    export VS_PSC_IP_WITH_PORT="${VS_PSC_IP}:10000"
+    VS_PSC_IP=$(terraform output -raw psc_address_ip)
+    VS_PSC_IP_WITH_PORT="${VS_PSC_IP}:10000"
     echo "PSC IP Address: ${VS_PSC_IP}"
   else
     echo "Warning: psc_address_ip not found in terraform output"
   fi
   
-  # Try to get match_grpc_address separately
+  # Get match_grpc_address
   if terraform output -raw vector_search_match_grpc_address &>/dev/null; then
     match_raw=$(terraform output -raw vector_search_match_grpc_address)
     # Add port if not already present
     if [[ "$match_raw" != *":"* && -n "$match_raw" ]]; then
-      export VS_MATCH_GRPC_ADDRESS="${match_raw}:10000"
+      VS_MATCH_GRPC_ADDRESS="${match_raw}:10000"
     else
-      export VS_MATCH_GRPC_ADDRESS="$match_raw"
+      VS_MATCH_GRPC_ADDRESS="$match_raw"
     fi
     echo "MATCH_GRPC_ADDRESS from Terraform: ${VS_MATCH_GRPC_ADDRESS}"
   else
     echo "Note: vector_search_match_grpc_address not available from Terraform"
-    export VS_MATCH_GRPC_ADDRESS=""
   fi
   
   cd ..
   
   # Add PSC configuration to locust_config.env
   echo "PSC_ENABLED=true" >> config/locust_config.env
-  echo "SERVICE_ATTACHMENT=${VS_SERVICE_ATTACHMENT}" >> config/locust_config.env
   
-  # Add MATCH_GRPC_ADDRESS if available from Terraform
+  if [[ -n "${VS_SERVICE_ATTACHMENT}" ]]; then
+    echo "SERVICE_ATTACHMENT=${VS_SERVICE_ATTACHMENT}" >> config/locust_config.env
+  fi
+  
   if [[ -n "${VS_MATCH_GRPC_ADDRESS}" ]]; then
     echo "MATCH_GRPC_ADDRESS=${VS_MATCH_GRPC_ADDRESS}" >> config/locust_config.env
   fi
   
-  # Add PSC_IP_ADDRESS with port
-  if [[ -n "${VS_PSC_IP}" ]]; then
+  if [[ -n "${VS_PSC_IP_WITH_PORT}" ]]; then
     echo "PSC_IP_ADDRESS=${VS_PSC_IP_WITH_PORT}" >> config/locust_config.env
   fi
 else
@@ -333,28 +313,49 @@ echo "Deploying in the Terraform workspace: $DEPLOYMENT_ID"
 # Apply the full infrastructure
 terraform apply --auto-approve
 
-DEPLOYED_CLUSTER_SVC=$(terraform output -raw locust_master_svc_name)
-DEPLOYED_CLUSTER_MAIN_NODE=$(terraform output -raw locust_master_node_name)
-DEPLOYED_CLUSTER_NAME=$(terraform output -raw gke_cluster_name)
-NGINX_PROXY_NAME=$(terraform output -raw nginx_proxy_name)
+# Get output values safely
+DEPLOYED_CLUSTER_SVC=""
+DEPLOYED_CLUSTER_MAIN_NODE=""
+DEPLOYED_CLUSTER_NAME=""
+NGINX_PROXY_NAME=""
 
-echo "GKE Cluster service: $DEPLOYED_CLUSTER_SVC"
-echo "GKE Cluster main node: $DEPLOYED_CLUSTER_MAIN_NODE"
-echo "GKE Cluster name: $DEPLOYED_CLUSTER_NAME"
-echo "NGINX proxy name: $NGINX_PROXY_NAME"
+if terraform output -raw locust_master_svc_name &>/dev/null; then
+  DEPLOYED_CLUSTER_SVC=$(terraform output -raw locust_master_svc_name)
+  echo "GKE Cluster service: $DEPLOYED_CLUSTER_SVC"
+fi
 
-# Configure kubectl
-echo "Configuring kubectl..."
-gcloud container clusters get-credentials $DEPLOYED_CLUSTER_NAME --project=${PROJECT_ID} --location=${REGION}
+if terraform output -raw locust_master_node_name &>/dev/null; then
+  DEPLOYED_CLUSTER_MAIN_NODE=$(terraform output -raw locust_master_node_name)
+  echo "GKE Cluster main node: $DEPLOYED_CLUSTER_MAIN_NODE"
+fi
+
+if terraform output -raw gke_cluster_name &>/dev/null; then
+  DEPLOYED_CLUSTER_NAME=$(terraform output -raw gke_cluster_name)
+  echo "GKE Cluster name: $DEPLOYED_CLUSTER_NAME"
+fi
+
+if terraform output -raw nginx_proxy_name &>/dev/null; then
+  NGINX_PROXY_NAME=$(terraform output -raw nginx_proxy_name)
+  echo "NGINX proxy name: $NGINX_PROXY_NAME"
+fi
+
+# Configure kubectl if we have a cluster name
+if [[ -n "$DEPLOYED_CLUSTER_NAME" ]]; then
+  echo "Configuring kubectl..."
+  gcloud container clusters get-credentials $DEPLOYED_CLUSTER_NAME --project=${PROJECT_ID} --location=${REGION}
+else
+  echo "Warning: Unable to get GKE cluster name, skipping kubectl configuration"
+fi
 
 echo "==================================="
 echo "Deployment Complete!"
 echo "==================================="
 
-# Setup access
-if [[ "${need_external_ip,,}" =~ ^(y|yes)$ ]]; then
-    kubectl delete svc ${DEPLOYED_CLUSTER_SVC} 
-    kubectl apply -f - <<EOF
+# Setup access if service name was found
+if [[ -n "$DEPLOYED_CLUSTER_SVC" && -n "$DEPLOYED_CLUSTER_MAIN_NODE" ]]; then
+  if [[ "${need_external_ip,,}" =~ ^(y|yes)$ ]]; then
+      kubectl delete svc ${DEPLOYED_CLUSTER_SVC} 
+      kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Service
 metadata:
@@ -369,26 +370,29 @@ spec:
     app: ${DEPLOYED_CLUSTER_MAIN_NODE}
 EOF
 
-    # Wait for the external IP to be assigned
-    echo "Waiting for external IP to be assigned..."
-    while true; do
-      EXTERNAL_IP=$(kubectl get svc ${DEPLOYED_CLUSTER_SVC} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-      if [ -n "$EXTERNAL_IP" ]; then
-        break
-      fi
-      echo "Still waiting for external IP..."
-      sleep 5
-    done
+      # Wait for the external IP to be assigned
+      echo "Waiting for external IP to be assigned..."
+      while true; do
+        EXTERNAL_IP=$(kubectl get svc ${DEPLOYED_CLUSTER_SVC} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+        if [ -n "$EXTERNAL_IP" ]; then
+          break
+        fi
+        echo "Still waiting for external IP..."
+        sleep 5
+      done
 
-    # Display the service information
-    kubectl get svc ${DEPLOYED_CLUSTER_SVC}
+      # Display the service information
+      kubectl get svc ${DEPLOYED_CLUSTER_SVC}
 
-    # Print the access URL with the actual IP
-    echo "Access Locust UI at http://$EXTERNAL_IP:8089"
+      # Print the access URL with the actual IP
+      echo "Access Locust UI at http://$EXTERNAL_IP:8089"
+  else
+      echo "Access Locust UI by running:"
+      echo "gcloud compute ssh ${NGINX_PROXY_NAME} --project ${PROJECT_ID} --zone ${ZONE} -- -NL 8089:localhost:8089"
+      echo "Then open http://localhost:8089 in your browser"
+  fi
 else
-    echo "Access Locust UI by running:"
-    echo "gcloud compute ssh ${NGINX_PROXY_NAME} --project ${PROJECT_ID} --zone ${ZONE} -- -NL 8089:localhost:8089"
-    echo "Then open http://localhost:8089 in your browser"
+  echo "Warning: Unable to set up access to Locust UI due to missing service information"
 fi
 
 # Verify deployment

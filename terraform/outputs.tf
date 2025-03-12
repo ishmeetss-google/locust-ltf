@@ -22,7 +22,7 @@ output "vector_search_deployed_index_id" {
 # -----------------------------------------------------------------------------
 output "vector_search_public_endpoint" {
   description = "The public endpoint domain name (if enabled)"
-  value       = module.vector_search.public_endpoint_domain_name
+  value       = try(module.vector_search.public_endpoint_domain_name, null)
 }
 
 # -----------------------------------------------------------------------------

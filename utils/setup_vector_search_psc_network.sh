@@ -6,7 +6,7 @@
 set -e
 
 # Configuration - REPLACE THESE VALUES
-PROJECT_ID="vertex-vision-382819"
+PROJECT_ID="email2podcast"
 REGION="us-central1"
 VPC_NAME="vertex-psc-network"
 SUBNET_NAME="vertex-psc-subnet"

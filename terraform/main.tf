@@ -106,7 +106,7 @@ module "gke_autopilot" {
   network               = local.endpoint_network
   subnetwork            = local.subnetwork
   enable_psc_support    = local.endpoint_enable_private_service_connect
-  use_private_endpoint  = local.use_private_endpoint
+  use_private_endpoint  = false
   master_ipv4_cidr_block = local.master_ipv4_cidr_block
   gke_pod_subnet_range   = local.gke_pod_subnet_range
   gke_service_subnet_range = local.gke_service_subnet_range
