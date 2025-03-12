@@ -50,6 +50,19 @@ export need_external_ip
 
 echo "External IP requested status =" $need_external_ip
 
+# Automatically determine blended_search based on sparse embedding config
+# Automatically determine blended_search based on sparse embedding config
+if [[ -v SPARSE_EMBEDDING_NUM_DIMENSIONS && -v SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES && \
+      ${SPARSE_EMBEDDING_NUM_DIMENSIONS:-0} -gt 0 && ${SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES:-0} -gt 0 ]]; then
+    export blended_search="y"
+    echo "Detected sparse embedding configuration - using blended search mode"
+else
+    export blended_search="n" 
+    echo "No sparse embedding configuration detected - using standard search mode"
+fi
+
+echo "Blended search status = $blended_search"
+
 # Enable required services
 echo "Enabling required Google Cloud services..."
 gcloud services enable aiplatform.googleapis.com \
@@ -70,7 +83,7 @@ gcloud artifacts repositories create locust-docker-repo --repository-format=dock
 mkdir -p config
 touch config/locust_config.env
 # Set correct permissions
-chmod 666 ./public_http_query.py    
+chmod 666 ./locust_tests/locust.py    
 chmod 666 config/locust_config.env
 
 # Phase 1: Deploy Vector Search infrastructure first
@@ -155,6 +168,35 @@ EOF
 
 cat terraform.tfvars
 
+# Add GKE network configuration if PSC is enabled
+if [[ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" == "true" ]]; then
+  echo "Configuring GKE for PSC support..."
+  
+  # Set up PSC network name if defined
+  [[ -n "$PSC_NETWORK_NAME" ]] && echo "psc_network_name = \"$PSC_NETWORK_NAME\"" >> terraform.tfvars
+
+  # Add GKE subnet configuration
+  [[ -n "$SUBNETWORK" ]] && echo "subnetwork = \"$SUBNETWORK\"" >> terraform.tfvars
+  [[ -n "$USE_PRIVATE_ENDPOINT" ]] && echo "use_private_endpoint = $USE_PRIVATE_ENDPOINT" >> terraform.tfvars
+  [[ -n "$MASTER_IPV4_CIDR_BLOCK" ]] && echo "master_ipv4_cidr_block = \"$MASTER_IPV4_CIDR_BLOCK\"" >> terraform.tfvars
+    
+  # Add IP ranges for GKE
+  [[ -n "$GKE_POD_SUBNET_RANGE" ]] && echo "gke_pod_subnet_range = \"$GKE_POD_SUBNET_RANGE\"" >> terraform.tfvars
+  [[ -n "$GKE_SERVICE_SUBNET_RANGE" ]] && echo "gke_service_subnet_range = \"$GKE_SERVICE_SUBNET_RANGE\"" >> terraform.tfvars
+fi
+
+# Determine the test t=pe based on PSC_ENABLED
+if [ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" = "true" ]; then
+  export LOCUST_TEST_TYPE="grpc"
+  echo "Setting load test type to gRPC for PSC endpoint"
+else
+  export LOCUST_TEST_TYPE="http"
+  echo "Setting load test type to HTTP for public endpoint"
+fi
+
+# Add the test type to terraform.tfvars
+echo "locust_test_type = \"${LOCUST_TEST_TYPE}\"" >> terraform.tfvars
+
 # Initialize and apply just the vector search module
 terraform init
 
@@ -165,12 +207,35 @@ terraform apply -target=module.vector_search --auto-approve
 # Extract crucial values from Terraform output
 echo "Extracting Vector Search configuration..."
 export VS_DIMENSIONS=${INDEX_DIMENSIONS}
-export VS_DEPLOYED_INDEX_ID=$(terraform output -raw vector_search_deployed_index_endpoint_id)
-export VS_INDEX_ENDPOINT_ID=$(terraform output -raw vector_search_index_endpoint_id)
-export VS_ENDPOINT_HOST=$(terraform output -raw vector_search_deployed_index_endpoint_host)
+export VS_DEPLOYED_INDEX_ID=$(terraform output -raw vector_search_deployed_index_id)
+export VS_INDEX_ENDPOINT_ID=$(terraform output -raw vector_search_endpoint_id)
+# Get the public endpoint but handle null values
+VS_PUBLIC_ENDPOINT=$(terraform output vector_search_public_endpoint | tr -d '"')
+if [[ "${VS_PUBLIC_ENDPOINT}" == "null" || -z "${VS_PUBLIC_ENDPOINT}" ]]; then
+    echo "Public endpoint is not available (expected with PSC enabled)"
+    export VS_ENDPOINT_HOST=""
+else
+    export VS_ENDPOINT_HOST="${VS_PUBLIC_ENDPOINT}"
+fi
+
 
 # Save these to a temporary file for Docker build
 cd ..
+if [[ "$blended_search" == "y" ]]; then
+cat <<EOF > config/locust_config.env
+INDEX_DIMENSIONS=${VS_DIMENSIONS}
+DEPLOYED_INDEX_ID=${VS_DEPLOYED_INDEX_ID}
+INDEX_ENDPOINT_ID=${VS_INDEX_ENDPOINT_ID}
+ENDPOINT_HOST=${VS_ENDPOINT_HOST}
+PROJECT_ID=${PROJECT_ID}
+SPARSE_EMBEDDING_NUM_DIMENSIONS=${SPARSE_EMBEDDING_NUM_DIMENSIONS}
+SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES=${SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES}
+NUM_NEIGHBORS=20
+DENSE_EMBEDDING_NUM_DIMENSIONS=${VS_DIMENSIONS}
+RETURN_FULL_DATAPOINT=False
+NUM_EMBEDDINGS_PER_REQUEST=50
+EOF
+else
 cat <<EOF > config/locust_config.env
 INDEX_DIMENSIONS=${VS_DIMENSIONS}
 DEPLOYED_INDEX_ID=${VS_DEPLOYED_INDEX_ID}
@@ -178,6 +243,62 @@ INDEX_ENDPOINT_ID=${VS_INDEX_ENDPOINT_ID}
 ENDPOINT_HOST=${VS_ENDPOINT_HOST}
 PROJECT_ID=${PROJECT_ID}
 EOF
+fi
+
+# Extract PSC-specific values if PSC is enabled
+if [[ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" == "true" ]]; then
+  echo "Extracting PSC configuration..."
+  cd terraform
+  export VS_PSC_ENABLED=true
+  export VS_SERVICE_ATTACHMENT=$(terraform output -raw vector_search_service_attachment)
+  
+  # Get PSC IP address if available
+  if terraform output -raw psc_address_ip &>/dev/null; then
+    export VS_PSC_IP=$(terraform output -raw psc_address_ip)
+    # Add port for the connection
+    export VS_PSC_IP_WITH_PORT="${VS_PSC_IP}:10000"
+    echo "PSC IP Address: ${VS_PSC_IP}"
+  else
+    echo "Warning: psc_address_ip not found in terraform output"
+  fi
+  
+  # Try to get match_grpc_address separately
+  if terraform output -raw vector_search_match_grpc_address &>/dev/null; then
+    match_raw=$(terraform output -raw vector_search_match_grpc_address)
+    # Add port if not already present
+    if [[ "$match_raw" != *":"* && -n "$match_raw" ]]; then
+      export VS_MATCH_GRPC_ADDRESS="${match_raw}:10000"
+    else
+      export VS_MATCH_GRPC_ADDRESS="$match_raw"
+    fi
+    echo "MATCH_GRPC_ADDRESS from Terraform: ${VS_MATCH_GRPC_ADDRESS}"
+  else
+    echo "Note: vector_search_match_grpc_address not available from Terraform"
+    export VS_MATCH_GRPC_ADDRESS=""
+  fi
+  
+  cd ..
+  
+  # Add PSC configuration to locust_config.env
+  echo "PSC_ENABLED=true" >> config/locust_config.env
+  echo "SERVICE_ATTACHMENT=${VS_SERVICE_ATTACHMENT}" >> config/locust_config.env
+  
+  # Add MATCH_GRPC_ADDRESS if available from Terraform
+  if [[ -n "${VS_MATCH_GRPC_ADDRESS}" ]]; then
+    echo "MATCH_GRPC_ADDRESS=${VS_MATCH_GRPC_ADDRESS}" >> config/locust_config.env
+  fi
+  
+  # Add PSC_IP_ADDRESS with port
+  if [[ -n "${VS_PSC_IP}" ]]; then
+    echo "PSC_IP_ADDRESS=${VS_PSC_IP_WITH_PORT}" >> config/locust_config.env
+  fi
+else
+  echo "PSC_ENABLED=false" >> config/locust_config.env
+fi
+
+# Display the contents of locust_config.env for verification
+echo "Contents of locust_config.env:"
+cat config/locust_config.env
 
 # Phase 2: Build and push Docker image with the config
 echo "Building and pushing Docker image..."
@@ -246,8 +367,8 @@ done
 # Display the service information
 kubectl get svc ${DEPLOYED_CLUSTER_SVC}
 
-# Print the access URL with the actual IP
-echo "Access Locust UI at http://$EXTERNAL_IP:8089"
+    # Print the access URL with the actual IP
+    echo "Access Locust UI at http://$EXTERNAL_IP:8089"
 else
     echo "Access Locust UI by running:"
     echo "gcloud compute ssh ${NGINX_PROXY_NAME} --project ${PROJECT_ID} --zone ${ZONE} -- -NL 8089:localhost:8089"
