@@ -1,4 +1,3 @@
-# variables.tf
 variable "project_id" {
   type        = string
   description = "GCP Project ID"
@@ -16,8 +15,6 @@ variable "region" {
   description = "GCP Region for Vertex Search"
   default     = "us-central1" # Default region, can be overridden
 }
-
-# modules/vertex-ai-vector-search/variables.tf
 
 # -----------------------------------------------------------------------------
 # Cloud Storage Bucket Variables (Existing Bucket - User Provided)
@@ -60,7 +57,6 @@ variable "index_labels" {
   description = "Labels for the Vector Index"
   default     = { purpose = "load-testing" }
 }
-
 
 variable "index_dimensions" {
   type        = number
@@ -153,8 +149,74 @@ variable "index_delete_timeout" {
 }
 
 # -----------------------------------------------------------------------------
-# Vertex AI Index Endpoint Variables
+# Network Configuration (CONSOLIDATED)
 # -----------------------------------------------------------------------------
+variable "network_configuration" {
+  type = object({
+    # Network settings
+    network_name = optional(string, "default")  # Just the name, not the full path
+    
+    # Subnetwork settings (only needed for PSC/private endpoints)
+    subnetwork = optional(string, "")    # Full path to subnetwork if needed
+    
+    # GKE cluster network configuration
+    master_ipv4_cidr_block = optional(string, "172.16.0.0/28")
+    pod_subnet_range = optional(string, "10.4.0.0/14")
+    service_subnet_range = optional(string, "10.0.32.0/20")
+  })
+  description = "Network configuration for the deployment"
+  default = {}
+}
+
+# -----------------------------------------------------------------------------
+# Endpoint Access Configuration (CONSOLIDATED)
+# -----------------------------------------------------------------------------
+variable "endpoint_access" {
+  type = object({
+    # Main access type setting (simplified from the previous two booleans)
+    type = string  # "public", "private_vpc", or "private_service_connect"
+    
+    # Settings for private service connect (only used when type = "private_service_connect")
+    use_private_endpoint = optional(bool, true)  # Whether to use private IP for GKE master
+  })
+  description = "Access configuration for the Vector Search endpoint"
+  default = {
+    type = "public"
+  }
+  validation {
+    condition = contains(["public", "private_vpc", "private_service_connect"], var.endpoint_access.type)
+    error_message = "endpoint_access.type must be one of: 'public', 'private_vpc', or 'private_service_connect'."
+  }
+}
+
+# For backwards compatibility - these will be derived from the above
+locals {
+  # Convert to the old variable formats for use in modules that haven't been updated
+  endpoint_network = var.endpoint_access.type != "public" ? (
+    "projects/${var.project_id}/global/networks/${var.network_configuration.network_name}"
+  ) : null
+  
+  endpoint_public_endpoint_enabled = var.endpoint_access.type == "public"
+  endpoint_enable_private_service_connect = var.endpoint_access.type == "private_service_connect"
+  
+  # GKE-specific settings derived from our new variables
+  use_private_endpoint = var.endpoint_access.type == "private_service_connect" ? (
+    var.endpoint_access.use_private_endpoint
+  ) : false
+  
+  # These are just direct pass-throughs
+  subnetwork = var.network_configuration.subnetwork
+  master_ipv4_cidr_block = var.network_configuration.master_ipv4_cidr_block
+  gke_pod_subnet_range = var.network_configuration.pod_subnet_range
+  gke_service_subnet_range = var.network_configuration.service_subnet_range
+}
+
+# -----------------------------------------------------------------------------
+# LEGACY Endpoint Variables (FOR BACKWARD COMPATIBILITY)
+# -----------------------------------------------------------------------------
+# These are kept for backward compatibility but are no longer used directly
+# See the consolidated endpoint_access variable above
+
 variable "endpoint_display_name" {
   type        = string
   description = "Display name for the Index Endpoint."
@@ -175,20 +237,26 @@ variable "endpoint_labels" {
 
 variable "endpoint_public_endpoint_enabled" {
   type        = bool
-  description = "Enable/disable public endpoint for the Index Endpoint."
+  description = "[DEPRECATED] Use endpoint_access.type instead. Enable/disable public endpoint for the Index Endpoint."
   default     = true # Default to public endpoint
 }
 
 variable "endpoint_network" {
   type        = string
-  description = "(Optional) The full name of the Google Compute Engine network (for VPC Peering).  If left unspecified, a public endpoint is created (unless PSC is enabled)."
+  description = "[DEPRECATED] Use network_configuration.network_name instead. The full name of the Google Compute Engine network (for VPC Peering)."
   default     = null
 }
 
 variable "endpoint_enable_private_service_connect" {
   type        = bool
-  description = "(Optional) Enable Private Service Connect (PSC) for the Index Endpoint.  If enabled, a private endpoint is created."
+  description = "[DEPRECATED] Use endpoint_access.type instead. Enable Private Service Connect (PSC) for the Index Endpoint."
   default     = false # Default to no PSC
+}
+
+variable "psc_network_name" {
+  type        = string
+  description = "[DEPRECATED] Use network_configuration.network_name instead. The name of the network to use for PSC."
+  default     = "vertex-psc-network"
 }
 
 variable "endpoint_create_timeout" {
@@ -208,6 +276,43 @@ variable "endpoint_delete_timeout" {
   description = "Timeout duration for endpoint deletion."
   default     = "30m"
 }
+
+# -----------------------------------------------------------------------------
+# LEGACY GKE Network Variables (FOR BACKWARD COMPATIBILITY)
+# -----------------------------------------------------------------------------
+# These are kept for backward compatibility but are no longer used directly
+# See the consolidated network_configuration variable above
+
+variable "subnetwork" {
+  type        = string
+  description = "[DEPRECATED] Use network_configuration.subnetwork instead. The subnetwork to host the GKE cluster in."
+  default     = ""
+}
+
+variable "use_private_endpoint" {
+  type        = bool
+  description = "[DEPRECATED] Use endpoint_access.use_private_endpoint instead. Whether the master's internal IP address is used as the cluster endpoint."
+  default     = false
+}
+
+variable "master_ipv4_cidr_block" {
+  type        = string
+  description = "[DEPRECATED] Use network_configuration.master_ipv4_cidr_block instead. The IP range in CIDR notation for the hosted master network."
+  default     = "172.16.0.0/28"
+}
+
+variable "gke_pod_subnet_range" {
+  type        = string
+  description = "[DEPRECATED] Use network_configuration.pod_subnet_range instead. IP address range for GKE pods in CIDR notation."
+  default     = "10.4.0.0/14"
+}
+
+variable "gke_service_subnet_range" {
+  type        = string
+  description = "[DEPRECATED] Use network_configuration.service_subnet_range instead. IP address range for GKE services in CIDR notation."
+  default     = "10.0.32.0/20"
+}
+
 # -----------------------------------------------------------------------------
 # Deployed Index Variables
 # -----------------------------------------------------------------------------
@@ -294,6 +399,7 @@ variable "deployment_id" {
   type        = string
   description = "Unique identifier for this deployment"
 }
+
 variable "locust_test_type" {
   description = "The type of load test to run (http or grpc)"
   type        = string
@@ -303,41 +409,4 @@ variable "locust_test_type" {
     condition     = contains(["http", "grpc"], var.locust_test_type)
     error_message = "The locust_test_type must be either 'http' or 'grpc'."
   }
-}
-
-# Additional variables for GKE network configuration
-variable "subnetwork" {
-  description = "The subnetwork to host the GKE cluster in (format: projects/{project}/regions/{region}/subnetworks/{subnetwork})"
-  type        = string
-  default     = ""
-}
-
-variable "use_private_endpoint" {
-  description = "Whether the master's internal IP address is used as the cluster endpoint"
-  type        = bool
-  default     = false
-}
-
-variable "master_ipv4_cidr_block" {
-  description = "The IP range in CIDR notation to use for the hosted master network"
-  type        = string
-  default     = "172.16.0.0/28"
-}
-
-variable "psc_network_name" {
-  description = "The name of the network to use for PSC (used when endpoint_network is not specified)"
-  type        = string
-  default     = "vertex-psc-network"
-}
-
-variable "gke_pod_subnet_range" {
-  description = "IP address range for GKE pods in CIDR notation"
-  type        = string
-  default     = "10.4.0.0/14"
-}
-
-variable "gke_service_subnet_range" {
-  description = "IP address range for GKE services in CIDR notation"
-  type        = string
-  default     = "10.0.32.0/20"
 }

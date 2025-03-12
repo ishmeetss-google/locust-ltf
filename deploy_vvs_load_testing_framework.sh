@@ -17,6 +17,64 @@ TIMESTAMP=$(date +%Y%m%d%H%M%S)
 DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo/locust-load-test:LTF-${TIMESTAMP}"
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 
+# Map the endpoint access type to Terraform variables
+case "${ENDPOINT_ACCESS_TYPE}" in
+  "public")
+    # Set endpoint_access variable for Terraform
+    export TF_VAR_endpoint_access='{"type":"public"}'
+    export LOCUST_TEST_TYPE="http"
+    echo "Configuring public endpoint access with HTTP tests"
+    ;;
+  "private_vpc")
+    export TF_VAR_endpoint_access='{"type":"private_vpc"}'
+    export LOCUST_TEST_TYPE="http"
+    echo "Configuring private VPC endpoint access with HTTP tests"
+    ;;
+  "private_service_connect")
+    export TF_VAR_endpoint_access='{"type":"private_service_connect"}'
+    export LOCUST_TEST_TYPE="grpc"
+    echo "Configuring Private Service Connect endpoint access with gRPC tests"
+    ;;
+  *)
+    echo "ERROR: Invalid ENDPOINT_ACCESS_TYPE. Must be one of: 'public', 'private_vpc', or 'private_service_connect'"
+    exit 1
+    ;;
+esac
+
+# Configure network settings object for Terraform
+NETWORK_CONFIG="{\"network_name\":\"${NETWORK_NAME:-default}\""
+
+# Add optional network configuration if provided
+[[ -n "${SUBNETWORK}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"subnetwork\":\"${SUBNETWORK}\""
+[[ -n "${MASTER_IPV4_CIDR_BLOCK}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"master_ipv4_cidr_block\":\"${MASTER_IPV4_CIDR_BLOCK}\""
+[[ -n "${GKE_POD_SUBNET_RANGE}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"pod_subnet_range\":\"${GKE_POD_SUBNET_RANGE}\""
+[[ -n "${GKE_SERVICE_SUBNET_RANGE}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"service_subnet_range\":\"${GKE_SERVICE_SUBNET_RANGE}\""
+
+# Close the JSON object
+NETWORK_CONFIG="${NETWORK_CONFIG}}"
+export TF_VAR_network_configuration="${NETWORK_CONFIG}"
+
+# For backward compatibility, also set the legacy variables
+if [[ "${ENDPOINT_ACCESS_TYPE}" == "public" ]]; then
+  export ENDPOINT_PUBLIC_ENDPOINT_ENABLED=true
+  export ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT=false
+elif [[ "${ENDPOINT_ACCESS_TYPE}" == "private_vpc" ]]; then
+  export ENDPOINT_PUBLIC_ENDPOINT_ENABLED=false
+  export ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT=false
+elif [[ "${ENDPOINT_ACCESS_TYPE}" == "private_service_connect" ]]; then
+  export ENDPOINT_PUBLIC_ENDPOINT_ENABLED=false
+  export ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT=true
+fi
+
+# Determine if blended search is enabled based on sparse embedding configuration
+if [[ -v SPARSE_EMBEDDING_NUM_DIMENSIONS && -v SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES ]]; then
+  export blended_search="y"
+  echo "Sparse embedding configuration detected - using blended search mode"
+else
+  export blended_search="n"
+  echo "No sparse embedding configuration detected - using standard search mode"
+fi
+
 # Print configuration for verification
 echo "==================================="
 echo "Configuration Summary:"
@@ -29,6 +87,10 @@ echo "Docker Image: $DOCKER_IMAGE"
 echo "Index Dimensions: $INDEX_DIMENSIONS"
 echo "Project Number: $PROJECT_NUMBER"
 echo "Deployment ID: $DEPLOYMENT_ID"
+echo "Endpoint Access Type: $ENDPOINT_ACCESS_TYPE"
+echo "Network Name: ${NETWORK_NAME:-default}"
+[[ -n "${SUBNETWORK}" ]] && echo "Subnetwork: $SUBNETWORK"
+echo "Blended Search: $blended_search"
 echo "==================================="
 
 if [[ -n "$VECTOR_SEARCH_INDEX_ID" ]]; then
@@ -48,20 +110,7 @@ fi
 read -r -p "Do you need an external IP? (y/n): " need_external_ip
 export need_external_ip
 
-echo "External IP requested status =" $need_external_ip
-
-# Automatically determine blended_search based on sparse embedding config
-# Automatically determine blended_search based on sparse embedding config
-if [[ -v SPARSE_EMBEDDING_NUM_DIMENSIONS && -v SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES && \
-      ${SPARSE_EMBEDDING_NUM_DIMENSIONS:-0} -gt 0 && ${SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES:-0} -gt 0 ]]; then
-    export blended_search="y"
-    echo "Detected sparse embedding configuration - using blended search mode"
-else
-    export blended_search="n" 
-    echo "No sparse embedding configuration detected - using standard search mode"
-fi
-
-echo "Blended search status = $blended_search"
+echo "External IP requested status = $need_external_ip"
 
 # Enable required services
 echo "Enabling required Google Cloud services..."
@@ -105,14 +154,13 @@ fi
 current_workspace=$(terraform workspace show)
 echo "Current Terraform workspace: $current_workspace"
 
-terraform workspace select $DEPLOYMENT_ID
-
 # Create or update terraform.tfvars with appropriate settings
 cat <<EOF > terraform.tfvars
 project_id     = "${PROJECT_ID}"
 region         = "${REGION}"
 project_number = "${PROJECT_NUMBER}"
 deployment_id  = "${DEPLOYMENT_ID}"
+locust_test_type = "${LOCUST_TEST_TYPE}"
 EOF
 
 # Check if we're using an existing index or need to create a new one
@@ -130,7 +178,6 @@ cat <<EOF >> terraform.tfvars
 index_dimensions = ${INDEX_DIMENSIONS}
 deployed_index_resource_type = "${DEPLOYED_INDEX_RESOURCE_TYPE:-dedicated}"
 deployed_index_dedicated_machine_type = "${DEPLOYED_INDEX_DEDICATED_MACHINE_TYPE:-e2-standard-16}"
-endpoint_public_endpoint_enabled = ${ENDPOINT_PUBLIC_ENDPOINT_ENABLED:-true}
 image = "${DOCKER_IMAGE}"
 EOF
 
@@ -150,8 +197,6 @@ EOF
 [[ -n "$ENDPOINT_DISPLAY_NAME" ]] && echo "endpoint_display_name = \"$ENDPOINT_DISPLAY_NAME\"" >> terraform.tfvars
 [[ -n "$ENDPOINT_DESCRIPTION" ]] && echo "endpoint_description = \"$ENDPOINT_DESCRIPTION\"" >> terraform.tfvars
 [[ -n "$ENDPOINT_LABELS" ]] && echo "endpoint_labels = $ENDPOINT_LABELS" >> terraform.tfvars
-[[ -n "$ENDPOINT_NETWORK" ]] && echo "endpoint_network = \"$ENDPOINT_NETWORK\"" >> terraform.tfvars
-[[ -n "$ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT" ]] && echo "endpoint_enable_private_service_connect = $ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT" >> terraform.tfvars
 [[ -n "$ENDPOINT_CREATE_TIMEOUT" ]] && echo "endpoint_create_timeout = \"$ENDPOINT_CREATE_TIMEOUT\"" >> terraform.tfvars
 [[ -n "$ENDPOINT_UPDATE_TIMEOUT" ]] && echo "endpoint_update_timeout = \"$ENDPOINT_UPDATE_TIMEOUT\"" >> terraform.tfvars
 [[ -n "$ENDPOINT_DELETE_TIMEOUT" ]] && echo "endpoint_delete_timeout = \"$ENDPOINT_DELETE_TIMEOUT\"" >> terraform.tfvars
@@ -166,36 +211,9 @@ EOF
 [[ -n "$DEPLOYED_INDEX_UPDATE_TIMEOUT" ]] && echo "deployed_index_update_timeout = \"$DEPLOYED_INDEX_UPDATE_TIMEOUT\"" >> terraform.tfvars
 [[ -n "$DEPLOYED_INDEX_DELETE_TIMEOUT" ]] && echo "deployed_index_delete_timeout = \"$DEPLOYED_INDEX_DELETE_TIMEOUT\"" >> terraform.tfvars
 
+# Display terraform.tfvars for verification
+echo "Contents of terraform.tfvars:"
 cat terraform.tfvars
-
-# Add GKE network configuration if PSC is enabled
-if [[ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" == "true" ]]; then
-  echo "Configuring GKE for PSC support..."
-  
-  # Set up PSC network name if defined
-  [[ -n "$PSC_NETWORK_NAME" ]] && echo "psc_network_name = \"$PSC_NETWORK_NAME\"" >> terraform.tfvars
-
-  # Add GKE subnet configuration
-  [[ -n "$SUBNETWORK" ]] && echo "subnetwork = \"$SUBNETWORK\"" >> terraform.tfvars
-  [[ -n "$USE_PRIVATE_ENDPOINT" ]] && echo "use_private_endpoint = $USE_PRIVATE_ENDPOINT" >> terraform.tfvars
-  [[ -n "$MASTER_IPV4_CIDR_BLOCK" ]] && echo "master_ipv4_cidr_block = \"$MASTER_IPV4_CIDR_BLOCK\"" >> terraform.tfvars
-    
-  # Add IP ranges for GKE
-  [[ -n "$GKE_POD_SUBNET_RANGE" ]] && echo "gke_pod_subnet_range = \"$GKE_POD_SUBNET_RANGE\"" >> terraform.tfvars
-  [[ -n "$GKE_SERVICE_SUBNET_RANGE" ]] && echo "gke_service_subnet_range = \"$GKE_SERVICE_SUBNET_RANGE\"" >> terraform.tfvars
-fi
-
-# Determine the test t=pe based on PSC_ENABLED
-if [ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" = "true" ]; then
-  export LOCUST_TEST_TYPE="grpc"
-  echo "Setting load test type to gRPC for PSC endpoint"
-else
-  export LOCUST_TEST_TYPE="http"
-  echo "Setting load test type to HTTP for public endpoint"
-fi
-
-# Add the test type to terraform.tfvars
-echo "locust_test_type = \"${LOCUST_TEST_TYPE}\"" >> terraform.tfvars
 
 # Initialize and apply just the vector search module
 terraform init
@@ -203,31 +221,37 @@ terraform init
 echo "Deploying vector search in the Terraform workspace: $DEPLOYMENT_ID"
 terraform apply -target=module.vector_search --auto-approve
 
-
 # Extract crucial values from Terraform output
 echo "Extracting Vector Search configuration..."
 export VS_DIMENSIONS=${INDEX_DIMENSIONS}
 export VS_DEPLOYED_INDEX_ID=$(terraform output -raw vector_search_deployed_index_id)
 export VS_INDEX_ENDPOINT_ID=$(terraform output -raw vector_search_endpoint_id)
-# Get the public endpoint but handle null values
+
+# Get the public endpoint but handle null values 
+# Note: Using public_endpoint_domain_name instead of public_endpoint
 VS_PUBLIC_ENDPOINT=$(terraform output vector_search_public_endpoint | tr -d '"')
 if [[ "${VS_PUBLIC_ENDPOINT}" == "null" || -z "${VS_PUBLIC_ENDPOINT}" ]]; then
-    echo "Public endpoint is not available (expected with PSC enabled)"
+    echo "Public endpoint is not available (expected with private endpoints)"
     export VS_ENDPOINT_HOST=""
 else
     export VS_ENDPOINT_HOST="${VS_PUBLIC_ENDPOINT}"
 fi
 
-
 # Save these to a temporary file for Docker build
 cd ..
-if [[ "$blended_search" == "y" ]]; then
+
+# Create base locust_config.env with common settings
 cat <<EOF > config/locust_config.env
 INDEX_DIMENSIONS=${VS_DIMENSIONS}
 DEPLOYED_INDEX_ID=${VS_DEPLOYED_INDEX_ID}
 INDEX_ENDPOINT_ID=${VS_INDEX_ENDPOINT_ID}
 ENDPOINT_HOST=${VS_ENDPOINT_HOST}
 PROJECT_ID=${PROJECT_ID}
+EOF
+
+# Add blended search settings if enabled
+if [[ "$blended_search" == "y" ]]; then
+  cat <<EOF >> config/locust_config.env
 SPARSE_EMBEDDING_NUM_DIMENSIONS=${SPARSE_EMBEDDING_NUM_DIMENSIONS}
 SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES=${SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES}
 NUM_NEIGHBORS=20
@@ -235,18 +259,10 @@ DENSE_EMBEDDING_NUM_DIMENSIONS=${VS_DIMENSIONS}
 RETURN_FULL_DATAPOINT=False
 NUM_EMBEDDINGS_PER_REQUEST=50
 EOF
-else
-cat <<EOF > config/locust_config.env
-INDEX_DIMENSIONS=${VS_DIMENSIONS}
-DEPLOYED_INDEX_ID=${VS_DEPLOYED_INDEX_ID}
-INDEX_ENDPOINT_ID=${VS_INDEX_ENDPOINT_ID}
-ENDPOINT_HOST=${VS_ENDPOINT_HOST}
-PROJECT_ID=${PROJECT_ID}
-EOF
 fi
 
 # Extract PSC-specific values if PSC is enabled
-if [[ "${ENDPOINT_ENABLE_PRIVATE_SERVICE_CONNECT}" == "true" ]]; then
+if [[ "${ENDPOINT_ACCESS_TYPE}" == "private_service_connect" ]]; then
   echo "Extracting PSC configuration..."
   cd terraform
   export VS_PSC_ENABLED=true
@@ -317,16 +333,15 @@ echo "Deploying in the Terraform workspace: $DEPLOYMENT_ID"
 # Apply the full infrastructure
 terraform apply --auto-approve
 
-
 DEPLOYED_CLUSTER_SVC=$(terraform output -raw locust_master_svc_name)
 DEPLOYED_CLUSTER_MAIN_NODE=$(terraform output -raw locust_master_node_name)
 DEPLOYED_CLUSTER_NAME=$(terraform output -raw gke_cluster_name)
 NGINX_PROXY_NAME=$(terraform output -raw nginx_proxy_name)
 
-echo $DEPLOYED_CLUSTER_MAIN_NODE
-echo $DEPLOYED_CLUSTER_SVC
-echo $DEPLOYED_CLUSTER_NAME
-echo $NGINX_PROXY_NAME
+echo "GKE Cluster service: $DEPLOYED_CLUSTER_SVC"
+echo "GKE Cluster main node: $DEPLOYED_CLUSTER_MAIN_NODE"
+echo "GKE Cluster name: $DEPLOYED_CLUSTER_NAME"
+echo "NGINX proxy name: $NGINX_PROXY_NAME"
 
 # Configure kubectl
 echo "Configuring kubectl..."
@@ -353,19 +368,20 @@ spec:
   selector:
     app: ${DEPLOYED_CLUSTER_MAIN_NODE}
 EOF
-# Wait for the external IP to be assigned
-echo "Waiting for external IP to be assigned..."
-while true; do
-  EXTERNAL_IP=$(kubectl get svc ${DEPLOYED_CLUSTER_SVC} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-  if [ -n "$EXTERNAL_IP" ]; then
-    break
-  fi
-  echo "Still waiting for external IP..."
-  sleep 5
-done
 
-# Display the service information
-kubectl get svc ${DEPLOYED_CLUSTER_SVC}
+    # Wait for the external IP to be assigned
+    echo "Waiting for external IP to be assigned..."
+    while true; do
+      EXTERNAL_IP=$(kubectl get svc ${DEPLOYED_CLUSTER_SVC} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+      if [ -n "$EXTERNAL_IP" ]; then
+        break
+      fi
+      echo "Still waiting for external IP..."
+      sleep 5
+    done
+
+    # Display the service information
+    kubectl get svc ${DEPLOYED_CLUSTER_SVC}
 
     # Print the access URL with the actual IP
     echo "Access Locust UI at http://$EXTERNAL_IP:8089"

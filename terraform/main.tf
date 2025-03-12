@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "google" {
-  region = var.region # Set the region at the provider level within the module
+  region = var.region
 }
 
 module "vector_search" {
@@ -16,7 +16,7 @@ module "vector_search" {
 
   # Project and region settings
   project_id           = var.project_id
-  region              = var.region
+  region               = var.region
   existing_bucket_name = var.existing_bucket_name
 
   # Index configuration
@@ -42,13 +42,13 @@ module "vector_search" {
   index_update_timeout  = var.index_update_timeout
   index_delete_timeout  = var.index_delete_timeout
 
-  # Endpoint configuration
+  # Endpoint configuration - use the derived locals from consolidated variables
   endpoint_display_name                   = var.endpoint_display_name
   endpoint_description                    = var.endpoint_description
   endpoint_labels                         = var.endpoint_labels
-  endpoint_public_endpoint_enabled        = var.endpoint_public_endpoint_enabled
-  endpoint_network                        = var.endpoint_network
-  endpoint_enable_private_service_connect = var.endpoint_enable_private_service_connect
+  endpoint_public_endpoint_enabled        = local.endpoint_public_endpoint_enabled
+  endpoint_network                        = local.endpoint_network
+  endpoint_enable_private_service_connect = local.endpoint_enable_private_service_connect
   endpoint_create_timeout                 = var.endpoint_create_timeout
   endpoint_update_timeout                 = var.endpoint_update_timeout
   endpoint_delete_timeout                 = var.endpoint_delete_timeout
@@ -68,29 +68,25 @@ module "vector_search" {
   deployment_id                         = var.deployment_id
 }
 
-# Add these resources to your main.tf file when Private Service Connect is enabled
-
-# Only create these resources when Private Service Connect is enabled
+# Create PSC address only when using Private Service Connect
 resource "google_compute_address" "psc_address" {
-  count        = var.endpoint_enable_private_service_connect ? 1 : 0
+  count        = local.endpoint_enable_private_service_connect ? 1 : 0
   name         = "ltf-psc-address"
   region       = var.region
   project      = var.project_id
-  subnetwork   = var.subnetwork != "" ? var.subnetwork : null
+  subnetwork   = local.subnetwork != "" ? local.subnetwork : null
   address_type = "INTERNAL"
   purpose      = "GCE_ENDPOINT"
   description  = "PSC address for Vector Search endpoint"
 }
 
+# Create forwarding rule only when using Private Service Connect
 resource "google_compute_forwarding_rule" "psc_forwarding_rule" {
-  count                 = var.endpoint_enable_private_service_connect ? 1 : 0
+  count                 = local.endpoint_enable_private_service_connect ? 1 : 0
   name                  = "ltf-psc-forwarding-rule"
   region                = var.region
   project               = var.project_id
-  network               = var.endpoint_enable_private_service_connect ? (
-    var.endpoint_network != "" ? var.endpoint_network : 
-    "projects/${var.project_id}/global/networks/${var.psc_network_name}"
-  ) : null
+  network               = local.endpoint_network
   ip_address            = google_compute_address.psc_address[0].self_link
   target                = module.vector_search.service_attachment
   load_balancing_scheme = ""
@@ -106,27 +102,21 @@ module "gke_autopilot" {
   image            = var.image
   locust_test_type = var.locust_test_type
 
-  network = var.endpoint_enable_private_service_connect ? (
-    var.endpoint_network != "" ? var.endpoint_network :
-    "projects/${var.project_id}/global/networks/${var.psc_network_name}"
-  ) : ""
-
-  subnetwork              = var.subnetwork
-  enable_psc_support      = var.endpoint_enable_private_service_connect
-  use_private_endpoint    = var.use_private_endpoint
-  master_ipv4_cidr_block = var.master_ipv4_cidr_block
-  gke_pod_subnet_range    = var.gke_pod_subnet_range
-  gke_service_subnet_range = var.gke_service_subnet_range
+  # Use simplified network configuration from locals
+  network               = local.endpoint_network
+  subnetwork            = local.subnetwork
+  enable_psc_support    = local.endpoint_enable_private_service_connect
+  use_private_endpoint  = local.use_private_endpoint
+  master_ipv4_cidr_block = local.master_ipv4_cidr_block
+  gke_pod_subnet_range   = local.gke_pod_subnet_range
+  gke_service_subnet_range = local.gke_service_subnet_range
 }
-
-# Add this to your main.tf file after the modules
 
 resource "google_compute_instance" "nginx_proxy" {
   name         = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-ltf-nginx-proxy"
-  machine_type = "e2-micro"  # Choose an appropriate machine type
-  zone         = "${var.region}-a"  # Adjust as needed
-  project      = var.project_id  # Add this line to specify the project
-
+  machine_type = "e2-micro"
+  zone         = "${var.region}-a"
+  project      = var.project_id
 
   boot_disk {
     initialize_params {
@@ -135,25 +125,22 @@ resource "google_compute_instance" "nginx_proxy" {
   }
 
   network_interface {
-    # Use the same network as the endpoint when PSC is enabled, otherwise use default
-    network = var.endpoint_enable_private_service_connect ? (
-      var.endpoint_network != "" ? (
-        # Extract network name from the full network path if provided
-        replace(var.endpoint_network, "/^projects\\/[^\\/]+\\/global\\/networks\\//", "")
-      ) : var.psc_network_name
+    # Use the consolidated network configuration
+    network = local.endpoint_enable_private_service_connect ? (
+      var.network_configuration.network_name
     ) : "default"
-
-    # If using PSC with a specific subnetwork, use that subnetwork
-    subnetwork = var.endpoint_enable_private_service_connect && var.subnetwork != "" ? var.subnetwork : null
+    
+    subnetwork = local.subnetwork != "" ? local.subnetwork : null
 
     # Only add public IP if not using private endpoints
     dynamic "access_config" {
-      for_each = var.endpoint_enable_private_service_connect ? [] : [1]
+      for_each = local.endpoint_enable_private_service_connect ? [] : [1]
       content {
         // Ephemeral public IP
       }
     }
   }
+  
   metadata = {
     gce-container-declaration = <<EOT
 spec:
@@ -192,4 +179,3 @@ EOT
 
   depends_on = [module.gke_autopilot]
 }
-
