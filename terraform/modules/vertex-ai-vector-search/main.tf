@@ -1,21 +1,6 @@
 # modules/vertex-ai-vector-search/main.tf
 
 # -----------------------------------------------------------------------------
-# Time Static Resource for Deployment Start
-# -----------------------------------------------------------------------------
-resource "time_static" "deployment_start" {
-  triggers = {
-    # This will be updated whenever any of the vector search resources change
-    vector_search_config = jsonencode({
-      index_id        = var.vector_search_index_id
-      endpoint_id     = var.endpoint_display_name
-      deployed_id     = var.deployed_index_id
-      deployment_id   = var.deployment_id
-    })
-  }
-}
-
-# -----------------------------------------------------------------------------
 # Vertex AI Index Resource
 # -----------------------------------------------------------------------------
 resource "google_vertex_ai_index" "vector_index" {
@@ -64,12 +49,18 @@ resource "google_vertex_ai_index" "vector_index" {
 }
 
 # -----------------------------------------------------------------------------
-# Local for index ID handling
+# Local for index ID handling and endpoint configuration
 # -----------------------------------------------------------------------------
 locals {
+  # Index ID handling
   index_id = var.vector_search_index_id != null ? var.vector_search_index_id : (
     length(google_vertex_ai_index.vector_index) > 0 ? google_vertex_ai_index.vector_index[0].id : null
   )
+  
+  # Service connection handling
+  is_public_endpoint = var.endpoint_public_endpoint_enabled
+  is_psc_enabled = var.endpoint_enable_private_service_connect
+  network_config = var.endpoint_enable_private_service_connect ? null : var.endpoint_network
 }
 
 # -----------------------------------------------------------------------------
@@ -81,14 +72,12 @@ resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
   display_name            = "${var.endpoint_display_name}-${var.deployment_id}"
   description             = var.endpoint_description
   labels                  = var.endpoint_labels
-  public_endpoint_enabled = var.endpoint_public_endpoint_enabled
-
-  # Only set network if PSC is not enabled
-  network = var.endpoint_enable_private_service_connect ? null : var.endpoint_network
+  public_endpoint_enabled = local.is_public_endpoint
+  network                 = local.network_config
 
   # Only set private_service_connect_config if PSC is enabled
   dynamic "private_service_connect_config" {
-    for_each = var.endpoint_enable_private_service_connect ? [1] : []
+    for_each = local.is_psc_enabled ? [1] : []
     content {
       enable_private_service_connect = true
       project_allowlist              = [var.project_id]
@@ -128,7 +117,7 @@ resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index
     }
   }
 
-  # Rest of the configuration remains the same
+  # Resource allocation based on type
   dynamic "dedicated_resources" {
     for_each = var.deployed_index_resource_type == "dedicated" ? [1] : []
     content {

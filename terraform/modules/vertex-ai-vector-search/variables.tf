@@ -154,22 +154,26 @@ variable "endpoint_labels" {
   default     = { purpose = "load-testing" }
 }
 
+# -----------------------------------------------------------------------------
+# Endpoint Access Variables (New consolidated approach)
+# -----------------------------------------------------------------------------
+# These variables will be passed from the root module's local variables
 variable "endpoint_public_endpoint_enabled" {
   type        = bool
   description = "Enable/disable public endpoint for the Index Endpoint."
-  default     = true # Default to public endpoint
-}
-
-variable "endpoint_network" {
-  type        = string
-  description = "(Optional) The full name of the Google Compute Engine network (for VPC Peering).  If left unspecified, a public endpoint is created (unless PSC is enabled)."
-  default     = null
+  default     = true
 }
 
 variable "endpoint_enable_private_service_connect" {
   type        = bool
-  description = "(Optional) Enable Private Service Connect (PSC) for the Index Endpoint.  If enabled, a private endpoint is created."
-  default     = false # Default to no PSC
+  description = "Enable Private Service Connect (PSC) for the Index Endpoint."
+  default     = false
+}
+
+variable "endpoint_network" {
+  type        = string
+  description = "The full name of the Google Compute Engine network (for VPC Peering)."
+  default     = null
 }
 
 variable "endpoint_create_timeout" {
@@ -189,6 +193,7 @@ variable "endpoint_delete_timeout" {
   description = "Timeout duration for endpoint deletion."
   default     = "30m"
 }
+
 # -----------------------------------------------------------------------------
 # Deployed Index Variables
 # -----------------------------------------------------------------------------

@@ -159,8 +159,11 @@ class Config:
             self._load_config(config_file_path)
         self._initialized = True
         
-        logging.info(f"Loaded configuration: PSC_ENABLED={self.psc_enabled}, "
-                     f"MATCH_GRPC_ADDRESS={self.match_grpc_address}, "
+        # Determine endpoint access type from configuration
+        self._determine_endpoint_access_type()
+        
+        logging.info(f"Loaded configuration: ENDPOINT_ACCESS_TYPE={self.endpoint_access_type}, "
+                     f"PSC_ENABLED={self.psc_enabled}, MATCH_GRPC_ADDRESS={self.match_grpc_address}, "
                      f"ENDPOINT_HOST={self.endpoint_host}")
     
     def _load_config(self, file_path):
@@ -192,19 +195,49 @@ class Config:
         self.deployed_index_id = self.config.get('DEPLOYED_INDEX_ID')
         self.index_endpoint_id = self.config.get('INDEX_ENDPOINT_ID')
         self.endpoint_host = self.config.get('ENDPOINT_HOST')
+        
+        # Support both old and new config formats
+        # New format: ENDPOINT_ACCESS_TYPE
+        self.endpoint_access_type = self.config.get('ENDPOINT_ACCESS_TYPE')
+        
+        # Old format: PSC_ENABLED
         self.psc_enabled = self.config.get('PSC_ENABLED', 'false').lower() in ('true', 'yes', '1')
+        
+        # PSC Configuration
         self.match_grpc_address = self.config.get('MATCH_GRPC_ADDRESS')
         self.service_attachment = self.config.get('SERVICE_ATTACHMENT')
         self.psc_ip_address = self.config.get('PSC_IP_ADDRESS')
+        
+        # Embedding configuration
         self.sparse_embedding_num_dimensions = int(self.config.get('SPARSE_EMBEDDING_NUM_DIMENSIONS', 0))
         self.sparse_embedding_num_dimensions_with_values = int(self.config.get('SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES', 0))
         self.num_neighbors = int(self.config.get('NUM_NEIGHBORS', 20)) 
         self.num_embeddings_per_request = int(self.config.get('NUM_EMBEDDINGS_PER_REQUEST', 1))
         self.return_full_datapoint = self.config.get('RETURN_FULL_DATAPOINT', 'False').lower() in ('true', 'yes', '1')
         
+        # Network configuration
+        self.network_name = self.config.get('NETWORK_NAME', 'default')
+        
         # If we have PSC_IP_ADDRESS but not MATCH_GRPC_ADDRESS, construct it
         if self.psc_ip_address and not self.match_grpc_address:
             self.match_grpc_address = f"{self.psc_ip_address}"
+    
+    def _determine_endpoint_access_type(self):
+        """Determine the endpoint access type from configuration."""
+        # If ENDPOINT_ACCESS_TYPE is directly specified, use it
+        if self.endpoint_access_type:
+            # Ensure it's one of the valid options
+            if self.endpoint_access_type not in ["public", "private_vpc", "private_service_connect"]:
+                logging.warning(f"Invalid ENDPOINT_ACCESS_TYPE '{self.endpoint_access_type}', defaulting to 'public'")
+                self.endpoint_access_type = "public"
+        else:
+            # Otherwise, derive it from PSC_ENABLED
+            if self.psc_enabled:
+                self.endpoint_access_type = "private_service_connect"
+                logging.info("Derived endpoint_access_type='private_service_connect' from PSC_ENABLED=true")
+            else:
+                self.endpoint_access_type = "public"
+                logging.info("Derived endpoint_access_type='public' from PSC_ENABLED=false")
     
     def get(self, key, default=None):
         """Get a configuration value by key."""
@@ -246,18 +279,19 @@ def _(parser):
 @events.init.add_listener
 def on_locust_init(environment, **kwargs):
     """Set up the host and tags based on configuration."""
-    is_psc_enabled = config.psc_enabled
+    # Determine test mode based on endpoint access type
+    is_psc_enabled = config.endpoint_access_type == "private_service_connect"
     
-    # Set default tags based on PSC mode if no tags were specified
+    # Set default tags based on endpoint access type if no tags were specified
     if hasattr(environment.parsed_options, 'tags') and not environment.parsed_options.tags:
         if is_psc_enabled:
             environment.parsed_options.tags = ['grpc']
-            logging.info("Auto-setting tags to 'grpc' based on PSC configuration")
+            logging.info("Auto-setting tags to 'grpc' based on endpoint access type 'private_service_connect'")
         else:
             environment.parsed_options.tags = ['http']
-            logging.info("Auto-setting tags to 'http' based on PSC configuration")
+            logging.info(f"Auto-setting tags to 'http' based on endpoint access type '{config.endpoint_access_type}'")
     
-    # Set host based on PSC mode if no host was specified
+    # Set host based on endpoint access type if no host was specified
     if not environment.host:
         if is_psc_enabled:
             # PSC/gRPC mode
@@ -265,6 +299,8 @@ def on_locust_init(environment, **kwargs):
             if grpc_address:
                 logging.info(f"Auto-setting host to gRPC address: {grpc_address}")
                 environment.host = grpc_address
+            else:
+                logging.warning("No MATCH_GRPC_ADDRESS found in configuration, host must be specified manually for PSC/gRPC mode")
         else:
             # HTTP mode
             endpoint_host = config.endpoint_host
@@ -272,6 +308,8 @@ def on_locust_init(environment, **kwargs):
                 host = f"https://{endpoint_host}"
                 logging.info(f"Auto-setting host to HTTP endpoint: {host}")
                 environment.host = host
+            else:
+                logging.warning("No ENDPOINT_HOST found in configuration, host must be specified manually for HTTP mode")
 
 class VectorSearchUser(User):
     """Combined Vector Search user class with both HTTP and gRPC implementations."""
@@ -295,8 +333,8 @@ class VectorSearchUser(User):
         self.project_id = config.project_id
         self.dimensions = config.dimensions
         
-        # Determine which mode we're running in based on PSC_ENABLED
-        self.use_psc = config.psc_enabled
+        # Determine which mode we're running in based on endpoint access type
+        self.use_psc = config.endpoint_access_type == "private_service_connect"
         
         # Setup HTTP client if needed
         if not self.use_psc or 'http' in getattr(self.environment.parsed_options, 'tags', []):
