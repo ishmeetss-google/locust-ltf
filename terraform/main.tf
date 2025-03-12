@@ -71,7 +71,7 @@ module "vector_search" {
 # Create PSC address only when using Private Service Connect
 resource "google_compute_address" "psc_address" {
   count        = local.endpoint_enable_private_service_connect ? 1 : 0
-  name         = "ltf-psc-address"
+  name         = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-ltf-psc-address"
   region       = var.region
   project      = var.project_id
   subnetwork   = local.subnetwork != "" ? local.subnetwork : null
@@ -83,7 +83,7 @@ resource "google_compute_address" "psc_address" {
 # Create forwarding rule only when using Private Service Connect
 resource "google_compute_forwarding_rule" "psc_forwarding_rule" {
   count                 = local.endpoint_enable_private_service_connect ? 1 : 0
-  name                  = "ltf-psc-forwarding-rule"
+  name                  = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-ltf-psc-forwarding-rule"
   region                = var.region
   project               = var.project_id
   network               = local.endpoint_network
