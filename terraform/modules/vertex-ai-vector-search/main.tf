@@ -1,5 +1,15 @@
 # modules/vertex-ai-vector-search/main.tf
 
+locals {
+  # Create a valid resource prefix from the deployment_id
+  # Ensures it starts with a letter and only contains letters, numbers, and underscores
+  clean_deployment_id = "${
+    length(regexall("^[a-zA-Z]", var.deployment_id)) > 0 
+      ? lower(replace(var.deployment_id, "/[^a-zA-Z0-9_]+/", "")) 
+      : "idx_${lower(replace(var.deployment_id, "/[^a-zA-Z0-9_]+/", ""))}"
+  }"
+}
+
 # -----------------------------------------------------------------------------
 # Vertex AI Index Resource
 # -----------------------------------------------------------------------------
@@ -7,7 +17,7 @@ resource "google_vertex_ai_index" "vector_index" {
   project      = var.project_id
   count        = var.vector_search_index_id == null ? 1 : 0
   region       = var.region
-  display_name = "${var.index_display_name}-${var.deployment_id}"
+  display_name = "${var.index_display_name}-${local.clean_deployment_id}"
   description  = var.index_description
   labels       = var.index_labels
 
@@ -69,7 +79,7 @@ locals {
 resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
   project                 = var.project_id
   region                  = var.region
-  display_name            = "${var.endpoint_display_name}-${var.deployment_id}"
+  display_name            = "${var.endpoint_display_name}-${local.clean_deployment_id}"
   description             = var.endpoint_description
   labels                  = var.endpoint_labels
   public_endpoint_enabled = local.is_public_endpoint
@@ -100,7 +110,7 @@ resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index
   index_endpoint = google_vertex_ai_index_endpoint.vector_index_endpoint.id
   index          = local.index_id
   # Simplified deployed_index_id using standardized deployment_id
-  deployed_index_id = "${var.deployed_index_id}_${var.deployment_id}"
+  deployed_index_id = "${var.deployed_index_id}_${local.clean_deployment_id}"
 
   # Optional PSC-related configurations
   enable_access_logging = var.enable_access_logging
