@@ -49,6 +49,8 @@ module "vector_search" {
   endpoint_public_endpoint_enabled        = local.endpoint_public_endpoint_enabled
   endpoint_network                        = local.endpoint_network
   endpoint_enable_private_service_connect = local.endpoint_enable_private_service_connect
+  # Add this parameter to pass VPC peering connection dependency
+  vpc_peering_connection                  = local.enable_vpc_peering ? google_service_networking_connection.vpc_peering_connection[0].id : null
   endpoint_create_timeout                 = var.endpoint_create_timeout
   endpoint_update_timeout                 = var.endpoint_update_timeout
   endpoint_delete_timeout                 = var.endpoint_delete_timeout
@@ -91,6 +93,28 @@ resource "google_compute_forwarding_rule" "psc_forwarding_rule" {
   target                = module.vector_search.service_attachment
   load_balancing_scheme = ""
   depends_on            = [module.vector_search]
+}
+
+# Create peering range only when using VPC Peering
+resource "google_compute_global_address" "vpc_peering_range" {
+  count         = local.enable_vpc_peering ? 1 : 0
+  name          = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-${var.peering_range_name}"
+  purpose       = "VPC_PEERING"
+  address_type  = "INTERNAL"
+  prefix_length = var.peering_prefix_length
+  network       = local.endpoint_network
+  project       = var.project_id
+}
+
+# Establish the VPC peering connection
+resource "google_service_networking_connection" "vpc_peering_connection" {
+  count                   = local.enable_vpc_peering ? 1 : 0
+  network                 = local.endpoint_network
+  service                 = "servicenetworking.googleapis.com"
+  reserved_peering_ranges = [google_compute_global_address.vpc_peering_range[0].name]
+  
+  # Workaround to allow `terraform destroy`, see https://github.com/hashicorp/terraform-provider-google/issues/18729
+  deletion_policy         = "ABANDON"
 }
 
 module "gke_autopilot" {

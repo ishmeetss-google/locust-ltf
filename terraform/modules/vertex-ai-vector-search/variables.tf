@@ -268,6 +268,15 @@ variable "deployed_index_delete_timeout" {
 }
 
 # -----------------------------------------------------------------------------
+# Additional VPC Peering Variables 
+# -----------------------------------------------------------------------------
+variable "vpc_peering_connection" {
+  description = "ID of the VPC peering connection (only required for vpc_peering access type)"
+  type        = string
+  default     = null
+}
+
+# -----------------------------------------------------------------------------
 # Additional PSC Variables 
 # -----------------------------------------------------------------------------
 variable "enable_access_logging" {

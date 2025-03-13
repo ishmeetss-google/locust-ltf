@@ -72,8 +72,15 @@ resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
   display_name            = "${var.endpoint_display_name}-${var.deployment_id}"
   description             = var.endpoint_description
   labels                  = var.endpoint_labels
-  public_endpoint_enabled = local.is_public_endpoint
-  network                 = local.network_config
+
+
+  # Use different network settings based on access type
+  public_endpoint_enabled = var.endpoint_public_endpoint_enabled
+
+  # For VPC peering, use network parameter but not PSC config
+  # For PSC, don't set network but add PSC config
+  # For public, don't set either
+  network = var.endpoint_enable_private_service_connect ? null : var.endpoint_network
 
   # Only set private_service_connect_config if PSC is enabled
   dynamic "private_service_connect_config" {
@@ -83,6 +90,11 @@ resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
       project_allowlist              = [var.project_id]
     }
   }
+
+    # Add dependency on VPC peering connection if it's provided
+  depends_on = compact([
+    var.vpc_peering_connection != null ? var.vpc_peering_connection : ""
+  ])
 
   timeouts {
     create = var.endpoint_create_timeout

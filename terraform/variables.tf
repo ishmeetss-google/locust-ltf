@@ -174,7 +174,7 @@ variable "network_configuration" {
 variable "endpoint_access" {
   type = object({
     # Main access type setting (simplified from the previous two booleans)
-    type = string  # "public", "private_vpc", or "private_service_connect"
+    type = string  # "public", "vpc_peering", or "private_service_connect"
     
     # Settings for private service connect (only used when type = "private_service_connect")
     use_private_endpoint = optional(bool, true)  # Whether to use private IP for GKE master
@@ -189,6 +189,19 @@ variable "endpoint_access" {
   }
 }
 
+# VPC Peering Variables
+variable "peering_range_name" {
+  description = "Name for the reserved IP range for VPC peering"
+  type        = string
+  default     = "vs-peering-range"
+}
+
+variable "peering_prefix_length" {
+  description = "Prefix length for the reserved IP range (e.g., 16 for /16 CIDR block)"
+  type        = number
+  default     = 16
+}
+
 # For backwards compatibility - these will be derived from the above
 locals {
   # Convert to the old variable formats for use in modules that haven't been updated
@@ -198,7 +211,8 @@ locals {
   
   endpoint_public_endpoint_enabled = var.endpoint_access.type == "public"
   endpoint_enable_private_service_connect = var.endpoint_access.type == "private_service_connect"
-  
+  enable_vpc_peering = var.endpoint_access.type == "vpc_peering"
+
   # GKE-specific settings derived from our new variables
   use_private_endpoint = var.endpoint_access.type == "private_service_connect" ? (
     var.endpoint_access.use_private_endpoint

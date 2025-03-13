@@ -17,19 +17,45 @@ TIMESTAMP=$(date +%Y%m%d%H%M%S)
 DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo/locust-load-test:LTF-${TIMESTAMP}"
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 
-# Set test type based on endpoint access type (simplified)
-if [[ "${ENDPOINT_ACCESS_TYPE}" == "private_service_connect" ]]; then
-  export LOCUST_TEST_TYPE="grpc"
-  echo "Configuring Private Service Connect endpoint access with gRPC tests"
-else
-  export LOCUST_TEST_TYPE="http"
-  echo "Configuring ${ENDPOINT_ACCESS_TYPE} endpoint access with HTTP tests"
-fi
+# Set test type and endpoint access based on ENDPOINT_ACCESS_TYPE
+case "${ENDPOINT_ACCESS_TYPE}" in
+  "public")
+    export TF_VAR_endpoint_access='{"type":"public"}'
+    export LOCUST_TEST_TYPE="http"
+    echo "Configuring public endpoint access with HTTP tests"
+    ;;
+  "vpc_peering")
+    export TF_VAR_endpoint_access='{"type":"vpc_peering"}'
+    export LOCUST_TEST_TYPE="http"
+    echo "Configuring VPC peering endpoint access with HTTP tests"
+    
+    # Validate required VPC peering parameters
+    if [[ -z "${NETWORK_NAME}" ]]; then
+      echo "ERROR: NETWORK_NAME must be set for vpc_peering access type"
+      exit 1
+    fi
+    
+    if [[ -z "${PEERING_RANGE_NAME}" ]]; then
+      echo "ERROR: PEERING_RANGE_NAME must be set for vpc_peering access type"
+      exit 1
+    fi
+    
+    # Enable Service Networking API (required for VPC peering)
+    echo "Enabling Service Networking API for VPC peering..."
+    gcloud services enable servicenetworking.googleapis.com --project="${PROJECT_ID}"
+    ;;
+  "private_service_connect")
+    export TF_VAR_endpoint_access='{"type":"private_service_connect"}'
+    export LOCUST_TEST_TYPE="grpc"
+    echo "Configuring Private Service Connect endpoint access with gRPC tests"
+    ;;
+  *)
+    echo "ERROR: Invalid ENDPOINT_ACCESS_TYPE. Must be one of: 'public', 'vpc_peering', 'private_service_connect'"
+    exit 1
+    ;;
+esac
 
-# Export the endpoint access type directly
-export TF_VAR_endpoint_access="{\"type\":\"${ENDPOINT_ACCESS_TYPE}\"}"
-
-# Configure simplified network settings
+# Configure network settings object for Terraform
 NETWORK_CONFIG="{\"network_name\":\"${NETWORK_NAME:-default}\""
 [[ -n "${SUBNETWORK}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"subnetwork\":\"${SUBNETWORK}\""
 [[ -n "${MASTER_IPV4_CIDR_BLOCK}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"master_ipv4_cidr_block\":\"${MASTER_IPV4_CIDR_BLOCK}\""
@@ -37,6 +63,12 @@ NETWORK_CONFIG="{\"network_name\":\"${NETWORK_NAME:-default}\""
 [[ -n "${GKE_SERVICE_SUBNET_RANGE}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"service_subnet_range\":\"${GKE_SERVICE_SUBNET_RANGE}\""
 NETWORK_CONFIG="${NETWORK_CONFIG}}"
 export TF_VAR_network_configuration="${NETWORK_CONFIG}"
+
+# Export VPC peering variables if needed
+if [[ "${ENDPOINT_ACCESS_TYPE}" == "vpc_peering" ]]; then
+  export TF_VAR_peering_range_name="${PEERING_RANGE_NAME}"
+  export TF_VAR_peering_prefix_length="${PEERING_PREFIX_LENGTH:-16}"
+fi
 
 # Determine if blended search is enabled (simplified)
 if [[ -v SPARSE_EMBEDDING_NUM_DIMENSIONS && -v SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES ]]; then
@@ -62,6 +94,13 @@ echo "Deployment ID: $DEPLOYMENT_ID"
 echo "Endpoint Access Type: $ENDPOINT_ACCESS_TYPE"
 echo "Network Name: ${NETWORK_NAME:-default}"
 [[ -n "${SUBNETWORK}" ]] && echo "Subnetwork: $SUBNETWORK"
+
+# Display VPC peering info if applicable
+if [[ "${ENDPOINT_ACCESS_TYPE}" == "vpc_peering" ]]; then
+  echo "VPC Peering Range Name: ${PEERING_RANGE_NAME}"
+  echo "VPC Peering Prefix Length: ${PEERING_PREFIX_LENGTH:-16}"
+fi
+
 echo "Blended Search: $blended_search"
 echo "==================================="
 
@@ -135,6 +174,14 @@ deployment_id  = "${DEPLOYMENT_ID}"
 locust_test_type = "${LOCUST_TEST_TYPE}"
 EOF
 
+# Add VPC peering variables if needed
+if [[ "${ENDPOINT_ACCESS_TYPE}" == "vpc_peering" ]]; then
+  cat <<EOF >> terraform.tfvars
+peering_range_name = "${PEERING_RANGE_NAME}"
+peering_prefix_length = ${PEERING_PREFIX_LENGTH:-16}
+EOF
+fi
+
 # Check if we're using an existing index or need to create a new one
 if [[ -n "${VECTOR_SEARCH_INDEX_ID}" ]]; then
   # Using existing index
@@ -182,6 +229,10 @@ EOF
 [[ -n "$DEPLOYED_INDEX_CREATE_TIMEOUT" ]] && echo "deployed_index_create_timeout = \"$DEPLOYED_INDEX_CREATE_TIMEOUT\"" >> terraform.tfvars
 [[ -n "$DEPLOYED_INDEX_UPDATE_TIMEOUT" ]] && echo "deployed_index_update_timeout = \"$DEPLOYED_INDEX_UPDATE_TIMEOUT\"" >> terraform.tfvars
 [[ -n "$DEPLOYED_INDEX_DELETE_TIMEOUT" ]] && echo "deployed_index_delete_timeout = \"$DEPLOYED_INDEX_DELETE_TIMEOUT\"" >> terraform.tfvars
+
+# Display terraform.tfvars for verification
+echo "Contents of terraform.tfvars:"
+cat terraform.tfvars
 
 # Initialize and apply just the vector search module
 terraform init

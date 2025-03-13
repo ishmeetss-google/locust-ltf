@@ -11,7 +11,7 @@ INDEX_DIMENSIONS=768
 DEPLOYMENT_ID="identifier-for-deployed-resources"
 
 # Endpoint access configuration (REQUIRED)
-ENDPOINT_ACCESS_TYPE="public"  # Options: "public", "private_service_connect"
+ENDPOINT_ACCESS_TYPE="public"  # Options: "public", "private_service_connect", "vpc_peering"
 
 # Index source configuration (REQUIRED - choose ONE option)
 # Option 1: Use existing index (uncomment and set value)
@@ -70,3 +70,9 @@ DEPLOYED_INDEX_DEDICATED_MACHINE_TYPE="e2-standard-16"  # Machine type for dedic
 # MASTER_IPV4_CIDR_BLOCK="172.16.0.0/28"    # IP range for GKE master
 # GKE_POD_SUBNET_RANGE="10.4.0.0/14"        # IP range for GKE pods
 # GKE_SERVICE_SUBNET_RANGE="10.0.32.0/20"   # IP range for GKE services
+
+# VPC Peering configuration (required for ENDPOINT_ACCESS_TYPE="vpc_peering")
+# Name for the reserved peering range
+# PEERING_RANGE_NAME="vs-peering-range"
+# # Prefix length for the reserved peering range (16=/16 CIDR, 20=/20 CIDR, etc.)
+# PEERING_PREFIX_LENGTH="16"
