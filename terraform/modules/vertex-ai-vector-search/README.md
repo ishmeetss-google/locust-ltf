@@ -29,6 +29,7 @@ module "vector_search" {
 
   project_id           = "your-project-id"
   region               = "us-central1"
+  # This refers to 'gs://your-embeddings-bucket/embeddings-folder'
   existing_bucket_name = "your-embeddings-bucket"
   embedding_data_path  = "embeddings-folder"
   index_dimensions     = 768
