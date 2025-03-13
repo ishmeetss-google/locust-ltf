@@ -55,8 +55,9 @@ case "${ENDPOINT_ACCESS_TYPE}" in
     ;;
 esac
 
-# Configure network settings object for Terraform
-NETWORK_CONFIG="{\"network_name\":\"${NETWORK_NAME:-default}\""
+
+# Configure simplified network settings
+NETWORK_CONFIG="{\"network_name\":\"${PSC_NETWORK_NAME:-default}\""
 [[ -n "${SUBNETWORK}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"subnetwork\":\"${SUBNETWORK}\""
 [[ -n "${MASTER_IPV4_CIDR_BLOCK}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"master_ipv4_cidr_block\":\"${MASTER_IPV4_CIDR_BLOCK}\""
 [[ -n "${GKE_POD_SUBNET_RANGE}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"pod_subnet_range\":\"${GKE_POD_SUBNET_RANGE}\""
@@ -69,6 +70,7 @@ if [[ "${ENDPOINT_ACCESS_TYPE}" == "vpc_peering" ]]; then
   export TF_VAR_peering_range_name="${PEERING_RANGE_NAME}"
   export TF_VAR_peering_prefix_length="${PEERING_PREFIX_LENGTH:-16}"
 fi
+echo "network configuration is ${TF_VAR_network_configuration}"
 
 # Determine if blended search is enabled (simplified)
 if [[ -v SPARSE_EMBEDDING_NUM_DIMENSIONS && -v SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES ]]; then
@@ -172,6 +174,7 @@ region         = "${REGION}"
 project_number = "${PROJECT_NUMBER}"
 deployment_id  = "${DEPLOYMENT_ID}"
 locust_test_type = "${LOCUST_TEST_TYPE}"
+network = "${NETWORK}"
 EOF
 
 # Add VPC peering variables if needed
