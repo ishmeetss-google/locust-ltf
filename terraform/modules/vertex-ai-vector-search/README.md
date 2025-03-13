@@ -130,7 +130,8 @@ module "vector_search" {
 
 | Variable | Description | Type | Default |
 |----------|-------------|------|---------|
-| `deployed_index_auth_enabled` | Enable authentication | bool | `false` |
+| `deployed_index_auth_enabled` | Enable authentication -- This is particularly useful when access to the index is restricted to authorized users or services, especially when using private endpoints. By configuring the deployed_index_auth_audiences and deployed_index_auth_allowed_issuers, you can precisely control which JWT tokens are accepted by the index.
+ | bool | `false` |
 | `deployed_index_auth_audiences` | Authentication audiences | list(string) | `[]` |
 | `deployed_index_auth_allowed_issuers` | Allowed JWT issuers | list(string) | `[]` |
 
