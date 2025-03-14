@@ -100,3 +100,8 @@ output "gke_cluster_name" {
   description = "The name of the deployed GKE cluster"
   value       = module.gke_autopilot.gke_cluster_name
 }
+
+output "locust_namespace" {
+  description = "The Kubernetes namespace where Locust resources are deployed"
+  value       = module.gke_autopilot.locust_namespace
+}

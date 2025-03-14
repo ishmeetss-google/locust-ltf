@@ -21,3 +21,8 @@ output "gke_cluster_name" {
   description = "The name of the deployed GKE cluster"
   value       = google_container_cluster.ltf_autopilot_cluster.name
 }
+
+output "locust_namespace" {
+  description = "The Kubernetes namespace where Locust resources are deployed"
+  value       = kubernetes_namespace.locust_namespace.metadata[0].name
+}

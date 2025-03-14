@@ -18,6 +18,7 @@ import grpc_interceptor
 import locust
 from locust import between, env, FastHttpUser, User, task, events, wait_time, tag
 import logging
+import requests
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
@@ -164,7 +165,7 @@ class Config:
         
         logging.info(f"Loaded configuration: ENDPOINT_ACCESS_TYPE={self.endpoint_access_type}, "
                      f"PSC_ENABLED={self.psc_enabled}, MATCH_GRPC_ADDRESS={self.match_grpc_address}, "
-                     f"ENDPOINT_HOST={self.endpoint_host}")
+                     f"ENDPOINT_HOST={self.endpoint_host}, PROJECT_NUMBER={self.project_number}")
     
     def _load_config(self, file_path):
         """Load configuration from a bash-style config file."""
@@ -191,6 +192,7 @@ class Config:
         
         # Set attributes from the config
         self.project_id = self.config.get('PROJECT_ID')
+        self.project_number = self.config.get('PROJECT_NUMBER', self.project_id)
         self.dimensions = int(self.config.get('INDEX_DIMENSIONS', 768))
         self.deployed_index_id = self.config.get('DEPLOYED_INDEX_ID')
         self.index_endpoint_id = self.config.get('INDEX_ENDPOINT_ID')
@@ -221,6 +223,13 @@ class Config:
         # If we have PSC_IP_ADDRESS but not MATCH_GRPC_ADDRESS, construct it
         if self.psc_ip_address and not self.match_grpc_address:
             self.match_grpc_address = f"{self.psc_ip_address}"
+            
+        # Get a clean numeric ID from the full endpoint ID
+        self.endpoint_id_numeric = None
+        if self.index_endpoint_id and "/" in self.index_endpoint_id:
+            self.endpoint_id_numeric = self.index_endpoint_id.split("/")[-1]
+        else:
+            self.endpoint_id_numeric = self.index_endpoint_id
     
     def _determine_endpoint_access_type(self):
         """Determine the endpoint access type from configuration."""
@@ -315,6 +324,9 @@ class VectorSearchUser(User):
     """Combined Vector Search user class with both HTTP and gRPC implementations."""
     
     def __init__(self, environment: env.Environment):
+        # Call parent initialization
+        super().__init__(environment)
+
         # Set up QPS-based wait time if specified
         user_qps = environment.parsed_options.qps_per_user
         if user_qps > 0:
@@ -324,39 +336,63 @@ class VectorSearchUser(User):
                 return fn(self)
             self.wait_time = wait_time_fn
         
-        # Call parent initialization
-        super().__init__(environment)
-        
         # Read technical parameters from config instead of loading them again
         self.deployed_index_id = config.deployed_index_id
         self.index_endpoint_id = config.index_endpoint_id
         self.project_id = config.project_id
+        self.project_number = config.project_number
         self.dimensions = config.dimensions
+        self.endpoint_id_numeric = config.endpoint_id_numeric
+        
+        # For better logging
+        logging.info(f"Initializing with: project_id={self.project_id}, "
+                    f"project_number={self.project_number}, "
+                    f"endpoint_id_numeric={self.endpoint_id_numeric}")
         
         # Determine which mode we're running in based on endpoint access type
-        self.use_psc = config.endpoint_access_type == "private_service_connect"
+        self.use_psc = config.endpoint_access_type in ["private_service_connect", "vpc_peering"]
         
         # Setup HTTP client if needed
         if not self.use_psc or 'http' in getattr(self.environment.parsed_options, 'tags', []):
-            # Set up HTTP authentication
+            # Set up HTTP authentication with requests
+            self.session = requests.Session()
+            adapter = requests.adapters.HTTPAdapter(
+                pool_connections=20,
+                pool_maxsize=50,
+                max_retries=0  # Let Locust handle retries
+            )
+            self.session.mount('https://', adapter)
+            
             self.credentials, _ = google.auth.default(
                 scopes=["https://www.googleapis.com/auth/cloud-platform"]
             )
             self.auth_req = google.auth.transport.requests.Request()
             self.credentials.refresh(self.auth_req)
+            self.token_refresh_time = time.time() + 3500  # Refresh after ~58 minutes
             self.headers = {
                 "Authorization": "Bearer " + self.credentials.token,
                 "Content-Type": "application/json",
             }
+
+            # Build the endpoint URL - use full URL including host
+            if self.environment.host:
+                base_url = self.environment.host
+                if not base_url.startswith("http"):
+                    base_url = f"https://{base_url}"
+                self.base_url = base_url
+            else:
+                self.base_url = f"https://{config.endpoint_host}"
             
-            # Build the endpoint URL
-            self.public_endpoint_url = f"/v1/{self.index_endpoint_id}:findNeighbors"
+            # Build the endpoint URL using project number
+            self.public_endpoint_url = f"/v1/projects/{self.project_number}/locations/us-central1/indexEndpoints/{self.endpoint_id_numeric}:findNeighbors"
+            
+            logging.info(f"HTTP client initialized with base_url={self.base_url}")
+            logging.info(f"Endpoint URL path: {self.public_endpoint_url}")
             
             # Build the base request
             self.request = {
                 "deployedIndexId": self.deployed_index_id,
             }
-            
             self.dp = {
                 "datapointId": "0",
             }
@@ -370,7 +406,7 @@ class VectorSearchUser(User):
                 self.query["fractionLeafNodesToSearchOverride"] = environment.parsed_options.fraction_leaf_nodes_to_search_override
                 
             self.request["queries"] = [self.query]
-            logging.info("HTTP client initialized")
+            logging.info("HTTP client initialization complete")
         
         # Setup gRPC client if needed
         if self.use_psc or 'grpc' in getattr(self.environment.parsed_options, 'tags', []):
@@ -402,12 +438,28 @@ class VectorSearchUser(User):
         self.num_neighbors = environment.parsed_options.num_neighbors
         self.fraction_leaf_nodes_to_search_override = environment.parsed_options.fraction_leaf_nodes_to_search_override
 
+    def on_stop(self):
+        """Called when the test stops."""
+        if hasattr(self, 'session'):
+            self.session.close()
+            logging.info("HTTP session closed")
+
     @task
     @tag('http')
     def http_find_neighbors(self):
         """Execute a Vector Search query using HTTP."""
-        if not hasattr(self, 'request'):
+        if not hasattr(self, 'session'):
             return  # Skip if not in HTTP mode
+        
+        # Check if token needs refreshing
+        if time.time() > self.token_refresh_time:
+            try:
+                self.credentials.refresh(self.auth_req)
+                self.headers["Authorization"] = "Bearer " + self.credentials.token
+                self.token_refresh_time = time.time() + 3500
+                logging.debug("OAuth token refreshed preemptively")
+            except Exception as e:
+                logging.error(f"Failed to refresh token: {str(e)}")
             
         # Handle sparse embedding case
         if (config.sparse_embedding_num_dimensions > 0 and
@@ -427,25 +479,71 @@ class VectorSearchUser(User):
         else:
             # Standard feature vector case
             self.request["queries"][0]["datapoint"]["featureVector"] = [
-                random.randint(-1000000, 1000000)
+                random.uniform(-1.0, 1.0)
                 for _ in range(self.dimensions)
             ]
         
-        # Send the request and handle the response
-        with self.client.request(
-            "POST",
-            url=self.public_endpoint_url,
-            json=self.request,
-            catch_response=True,
-            headers=self.headers,
-        ) as response:
+        # Send the request using requests library and manually report to Locust
+        url = f"{self.base_url}{self.public_endpoint_url}"
+        
+        start_time = time.perf_counter()
+        exception = None
+        response = None
+        response_length = 0
+        
+        try:
+            # Execute request
+            response = self.session.post(
+                url=url,
+                json=self.request,
+                headers=self.headers,
+                timeout=30
+            )
+            
+            # Record response length if available
+            if response and hasattr(response, "text"):
+                response_length = len(response.text)
+            
+            # Check response status
             if response.status_code == 401:
-                # Refresh token on auth error
+                # Refresh token on auth issues
                 self.credentials.refresh(self.auth_req)
                 self.headers["Authorization"] = "Bearer " + self.credentials.token
+                self.token_refresh_time = time.time() + 3500
+                exception = "Authentication failure, token refreshed"
+                logging.info("OAuth token refreshed after 401 error")
+            elif response.status_code == 403:
+                # Log detailed error for permission issues
+                exception = f"Permission denied: {response.text}"
+                logging.error(f"HTTP 403 error: {response.text}")
+                logging.info(f"Request URL: {url}")
+                logging.info(f"Using project_number: {self.project_number}")
             elif response.status_code != 200:
-                # Mark failed responses
-                response.failure(f"Failed with status code: {response.status_code}, body: {response.text}")
+                # Handle other errors
+                exception = f"HTTP Error {response.status_code}: {response.text}"
+                logging.error(f"HTTP error {response.status_code}: {response.text[:500]}")
+        except requests.exceptions.Timeout:
+            exception = "Request timed out"
+            logging.error("HTTP request timed out")
+        except requests.exceptions.ConnectionError:
+            exception = "Connection error"
+            logging.error("HTTP connection error")
+        except Exception as e:
+            exception = f"Unexpected error: {str(e)}"
+            logging.error(f"Unexpected error in HTTP request: {str(e)}")
+        finally:
+            # Calculate duration
+            response_time = (time.perf_counter() - start_time) * 1000
+            
+            # Report to Locust
+            self.environment.events.request.fire(
+                request_type="HTTP",
+                name=self.public_endpoint_url,
+                response_time=response_time,
+                response_length=response_length,
+                exception=exception,
+                context={},
+            )
     
     @task
     @tag('grpc')
@@ -463,7 +561,7 @@ class VectorSearchUser(User):
                 range(config.sparse_embedding_num_dimensions),
                 config.sparse_embedding_num_dimensions_with_values
             )
-            values = [random.uniform(-1, 1) 
+            values = [random.uniform(-1.0, 1.0) 
                      for _ in range(config.sparse_embedding_num_dimensions_with_values)]
             datapoint = IndexDatapoint(
                 datapoint_id='0',
@@ -477,7 +575,7 @@ class VectorSearchUser(User):
             datapoint = IndexDatapoint(
                 datapoint_id="0",
                 feature_vector=[
-                    random.randint(-1000000, 1000000)
+                    random.uniform(-1.0, 1.0)
                     for _ in range(self.dimensions)
                 ]
             )
@@ -492,9 +590,11 @@ class VectorSearchUser(User):
         if self.fraction_leaf_nodes_to_search_override > 0:
             query.fraction_leaf_nodes_to_search_override = self.fraction_leaf_nodes_to_search_override
         
-        # Create the request
+        # Create the request - use the proper format with project number
+        index_endpoint = f"projects/{self.project_number}/locations/us-central1/indexEndpoints/{self.endpoint_id_numeric}"
+        
         request = FindNeighborsRequest(
-            index_endpoint=self.index_endpoint_id,
+            index_endpoint=index_endpoint,
             deployed_index_id=self.deployed_index_id,
             queries=[query]
         )

@@ -76,7 +76,8 @@ resource "google_compute_address" "psc_address" {
   name         = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-ltf-psc-address"
   region       = var.region
   project      = var.project_id
-  subnetwork   = local.subnetwork != "" ? local.subnetwork : null
+  # Use subnetwork directly from network_configuration
+  subnetwork   = var.network_configuration.subnetwork
   address_type = "INTERNAL"
   purpose      = "GCE_ENDPOINT"
   description  = "PSC address for Vector Search endpoint"

@@ -26,11 +26,11 @@ case "${ENDPOINT_ACCESS_TYPE}" in
     ;;
   "vpc_peering")
     export TF_VAR_endpoint_access='{"type":"vpc_peering"}'
-    export LOCUST_TEST_TYPE="http"
-    echo "Configuring VPC peering endpoint access with HTTP tests"
+    export LOCUST_TEST_TYPE="grpc"  # Changed to grpc for vpc_peering
+    echo "Configuring VPC peering endpoint access with gRPC tests"
     
     # Validate required VPC peering parameters
-    if [[ -z "${NETWORK_NAME}" ]]; then
+    if [[ -z "${VPC_NETWORK_NAME}" ]]; then
       echo "ERROR: NETWORK_NAME must be set for vpc_peering access type"
       exit 1
     fi
@@ -65,6 +65,46 @@ NETWORK_CONFIG="{\"network_name\":\"${VPC_NETWORK_NAME:-default}\""
 NETWORK_CONFIG="${NETWORK_CONFIG}}"
 export TF_VAR_network_configuration="${NETWORK_CONFIG}"
 
+# Validate subnet belongs to the specified VPC
+if [[ -n "${SUBNETWORK}" && -n "${VPC_NETWORK_NAME}" ]]; then
+  echo "Validating subnet ${SUBNETWORK} belongs to network ${VPC_NETWORK_NAME}..."
+  
+  # # Print all subnets for debugging
+  # echo "Available subnets:"
+  # gcloud compute networks subnets list --project="${PROJECT_ID}" --format="table(name,network,region)"
+  
+  # Extract just the subnet name from the full path if provided
+  SUBNET_NAME=$(basename "${SUBNETWORK}")
+  # echo "Looking for subnet: ${SUBNET_NAME}"
+  
+  # Get network URL format that GCP uses internally 
+  NETWORK_URL="projects/${PROJECT_ID}/global/networks/${VPC_NETWORK_NAME}"
+  # echo "Looking for network: ${NETWORK_URL}"
+  
+  # List specific subnet with details for debugging
+  # echo "Detailed subnet info:"
+  SUBNET_DETAILS=$(gcloud compute networks subnets describe ${SUBNET_NAME} \
+    --project="${PROJECT_ID}" \
+    --region="${REGION}" \
+    --format="yaml" 2>/dev/null)
+    
+  # echo "${SUBNET_DETAILS}"
+  
+  # Extract network from subnet details
+  SUBNET_NETWORK=$(echo "${SUBNET_DETAILS}" | grep "network:" | awk '{print $2}')
+  # echo "Subnet belongs to network: ${SUBNET_NETWORK}"
+  
+  # Compare the networks
+  if [[ "${SUBNET_NETWORK}" == *"${VPC_NETWORK_NAME}"* ]]; then
+    echo "✅ Subnet validation successful: ${SUBNET_NAME} belongs to ${VPC_NETWORK_NAME}"
+  else
+    echo "❌ ERROR: Subnet '${SUBNET_NAME}' does not appear to belong to network '${VPC_NETWORK_NAME}'."
+    echo "The subnet belongs to network: ${SUBNET_NETWORK}"
+    echo "Please verify your network configuration."
+    exit 1
+  fi
+fi
+
 # Export VPC peering variables if needed
 if [[ "${ENDPOINT_ACCESS_TYPE}" == "vpc_peering" ]]; then
   export TF_VAR_peering_range_name="${PEERING_RANGE_NAME}"
@@ -86,14 +126,15 @@ echo "==================================="
 echo "Configuration Summary:"
 echo "==================================="
 echo "Project ID: $PROJECT_ID"
+echo "Project Number: $PROJECT_NUMBER"
 echo "Region: $REGION"
 echo "Zone: $ZONE"
 echo "Timestamp: $TIMESTAMP"
 echo "Docker Image: $DOCKER_IMAGE"
 echo "Index Dimensions: $INDEX_DIMENSIONS"
-echo "Project Number: $PROJECT_NUMBER"
 echo "Deployment ID: $DEPLOYMENT_ID"
 echo "Endpoint Access Type: $ENDPOINT_ACCESS_TYPE"
+echo "Locust Test Type: $LOCUST_TEST_TYPE"
 echo "Network Name: ${VPC_NETWORK_NAME:-default}"
 [[ -n "${SUBNETWORK}" ]] && echo "Subnetwork: $SUBNETWORK"
 
@@ -174,7 +215,14 @@ region         = "${REGION}"
 project_number = "${PROJECT_NUMBER}"
 deployment_id  = "${DEPLOYMENT_ID}"
 locust_test_type = "${LOCUST_TEST_TYPE}"
-network = "${VPC_NETWORK_NAME}"
+# Network configuration using the new consolidated structure
+network_configuration = {
+  network_name = "${VPC_NETWORK_NAME:-default}"
+  subnetwork = "${SUBNETWORK}"
+  master_ipv4_cidr_block = "${MASTER_IPV4_CIDR_BLOCK:-172.16.0.0/28}"
+  pod_subnet_range = "${GKE_POD_SUBNET_RANGE:-10.4.0.0/14}"
+  service_subnet_range = "${GKE_SERVICE_SUBNET_RANGE:-10.0.32.0/20}"
+}
 EOF
 
 # Add VPC peering variables if needed
@@ -269,6 +317,8 @@ DEPLOYED_INDEX_ID=${VS_DEPLOYED_INDEX_ID}
 INDEX_ENDPOINT_ID=${VS_INDEX_ENDPOINT_ID}
 ENDPOINT_HOST=${VS_ENDPOINT_HOST}
 PROJECT_ID=${PROJECT_ID}
+PROJECT_NUMBER=${PROJECT_NUMBER}
+ENDPOINT_ACCESS_TYPE=${ENDPOINT_ACCESS_TYPE}
 EOF
 
 # Add blended search settings if enabled
@@ -364,7 +414,7 @@ terraform workspace select $DEPLOYMENT_ID
 
 echo "Deploying in the Terraform workspace: $DEPLOYMENT_ID"
 
-# Apply the full infrastructure
+# Create all GKE + Kubernetes resources
 terraform apply --auto-approve
 
 # Get output values safely
@@ -372,6 +422,22 @@ DEPLOYED_CLUSTER_SVC=""
 DEPLOYED_CLUSTER_MAIN_NODE=""
 DEPLOYED_CLUSTER_NAME=""
 NGINX_PROXY_NAME=""
+LOCUST_NAMESPACE=""
+
+
+if terraform output -raw gke_cluster_name &>/dev/null; then
+  DEPLOYED_CLUSTER_NAME=$(terraform output -raw gke_cluster_name)
+  echo "GKE Cluster name: $DEPLOYED_CLUSTER_NAME"
+fi
+
+# Configure kubectl if we have a cluster name
+if [[ -n "$DEPLOYED_CLUSTER_NAME" ]]; then
+  echo "Configuring kubectl..."
+  gcloud container clusters get-credentials $DEPLOYED_CLUSTER_NAME --project=${PROJECT_ID} --location=${REGION}
+else
+  echo "Warning: Unable to get GKE cluster name, skipping kubectl configuration"
+fi
+
 
 if terraform output -raw locust_master_svc_name &>/dev/null; then
   DEPLOYED_CLUSTER_SVC=$(terraform output -raw locust_master_svc_name)
@@ -383,22 +449,21 @@ if terraform output -raw locust_master_node_name &>/dev/null; then
   echo "GKE Cluster main node: $DEPLOYED_CLUSTER_MAIN_NODE"
 fi
 
-if terraform output -raw gke_cluster_name &>/dev/null; then
-  DEPLOYED_CLUSTER_NAME=$(terraform output -raw gke_cluster_name)
-  echo "GKE Cluster name: $DEPLOYED_CLUSTER_NAME"
-fi
-
 if terraform output -raw nginx_proxy_name &>/dev/null; then
   NGINX_PROXY_NAME=$(terraform output -raw nginx_proxy_name)
   echo "NGINX proxy name: $NGINX_PROXY_NAME"
 fi
 
-# Configure kubectl if we have a cluster name
-if [[ -n "$DEPLOYED_CLUSTER_NAME" ]]; then
-  echo "Configuring kubectl..."
-  gcloud container clusters get-credentials $DEPLOYED_CLUSTER_NAME --project=${PROJECT_ID} --location=${REGION}
+# Get the namespace where resources are deployed
+if terraform output -raw locust_namespace &>/dev/null; then
+  LOCUST_NAMESPACE=$(terraform output -raw locust_namespace)
+  echo "Locust resources namespace: $LOCUST_NAMESPACE"
 else
-  echo "Warning: Unable to get GKE cluster name, skipping kubectl configuration"
+  # Fallback - construct the namespace based on deployment ID
+  LOCUST_NAMESPACE="${DEPLOYMENT_ID}-ns"
+  LOCUST_NAMESPACE="${LOCUST_NAMESPACE//[^a-zA-Z0-9-]/-}"
+  LOCUST_NAMESPACE="${LOCUST_NAMESPACE,,}"
+  echo "Using constructed namespace: $LOCUST_NAMESPACE"
 fi
 
 echo "==================================="
@@ -406,10 +471,11 @@ echo "Deployment Complete!"
 echo "==================================="
 
 # Setup access if service name was found
-if [[ -n "$DEPLOYED_CLUSTER_SVC" && -n "$DEPLOYED_CLUSTER_MAIN_NODE" ]]; then
+if [[ -n "$DEPLOYED_CLUSTER_SVC" && -n "$DEPLOYED_CLUSTER_MAIN_NODE" && -n "$LOCUST_NAMESPACE" ]]; then
   if [[ "${need_external_ip,,}" =~ ^(y|yes)$ ]]; then
-      kubectl delete svc ${DEPLOYED_CLUSTER_SVC} 
-      kubectl apply -f - <<EOF
+      # Always specify the namespace when interacting with Kubernetes resources
+      kubectl -n $LOCUST_NAMESPACE delete svc ${DEPLOYED_CLUSTER_SVC} 
+      kubectl -n $LOCUST_NAMESPACE apply -f - <<EOF
 apiVersion: v1
 kind: Service
 metadata:
@@ -427,7 +493,7 @@ EOF
       # Wait for the external IP to be assigned
       echo "Waiting for external IP to be assigned..."
       while true; do
-        EXTERNAL_IP=$(kubectl get svc ${DEPLOYED_CLUSTER_SVC} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+        EXTERNAL_IP=$(kubectl -n $LOCUST_NAMESPACE get svc ${DEPLOYED_CLUSTER_SVC} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
         if [ -n "$EXTERNAL_IP" ]; then
           break
         fi
@@ -436,7 +502,7 @@ EOF
       done
 
       # Display the service information
-      kubectl get svc ${DEPLOYED_CLUSTER_SVC}
+      kubectl -n $LOCUST_NAMESPACE get svc ${DEPLOYED_CLUSTER_SVC}
 
       # Print the access URL with the actual IP
       echo "Access Locust UI at http://$EXTERNAL_IP:8089"
@@ -449,6 +515,6 @@ else
   echo "Warning: Unable to set up access to Locust UI due to missing service information"
 fi
 
-# Verify deployment
-echo "Verifying deployments..."
-kubectl get deployments
+# Verify deployment - include namespace
+echo "Verifying deployments in namespace $LOCUST_NAMESPACE..."
+kubectl -n $LOCUST_NAMESPACE get deployments

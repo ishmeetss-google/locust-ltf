@@ -112,12 +112,15 @@ resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
 # Vertex AI Deployed Index Resource (Deploy Index to Endpoint)
 # -----------------------------------------------------------------------------
 
+resource "random_id" "suffix" {
+  byte_length = 4
+}
 resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index" {
   depends_on     = [google_vertex_ai_index_endpoint.vector_index_endpoint]
   index_endpoint = google_vertex_ai_index_endpoint.vector_index_endpoint.id
   index          = local.index_id
   # Simplified deployed_index_id using standardized deployment_id
-  deployed_index_id = "${var.deployed_index_id}_${local.clean_deployment_id}"
+  deployed_index_id = "${var.deployed_index_id}_${local.clean_deployment_id}_${random_id.suffix.hex}"
 
   # Optional PSC-related configurations
   enable_access_logging = var.enable_access_logging

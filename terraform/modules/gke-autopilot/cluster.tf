@@ -14,6 +14,10 @@ locals {
 
   # For naming resources
   cluster_name = "ltf-autopilot-cluster"
+  
+  # Create namespace+SA identifier for Workload Identity
+  k8s_namespace = "${local.resource_prefix}-ns"
+  k8s_sa_name   = "${local.resource_prefix}-sa"
 }
 
 # Create the service account if it doesn't exist
@@ -29,6 +33,22 @@ resource "google_service_account" "service_account" {
       display_name,
     ]
   }
+}
+
+# Allow workload identity binding between K8s SA and GCP SA
+resource "google_service_account_iam_binding" "workload_identity_binding" {
+  service_account_id = google_service_account.service_account.name
+  role               = "roles/iam.workloadIdentityUser"
+  members = [
+    "serviceAccount:${var.project_id}.svc.id.goog[${local.k8s_namespace}/${local.k8s_sa_name}]"
+  ]
+}
+
+# Grant AI Platform user role to service account - without this binding method
+resource "google_project_iam_member" "direct_aiplatform_user" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.service_account.email}"
 }
 
 resource "google_project_iam_binding" "artifactregistry_reader_binding" {
@@ -93,7 +113,7 @@ resource "google_container_cluster" "ltf_autopilot_cluster" {
     }
   }
 
-    # Add this new block to configure master authorized networks
+  # Add this new block to configure master authorized networks
   dynamic "master_authorized_networks_config" {
     for_each = var.use_private_endpoint ? [1] : []
     content {
@@ -142,7 +162,7 @@ resource "google_container_cluster" "ltf_autopilot_cluster" {
 # (using IP-based approach instead of tags)
 resource "google_compute_firewall" "allow_psc_ingress" {
   count   = var.enable_psc_support && local.using_custom_network ? 1 : 0
-  name    = "allow-psc-for-vector-search"
+  name    = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-allow-psc-for-vector-search"
   network = local.network_name
   project = var.project_id
 
@@ -166,7 +186,7 @@ resource "google_compute_firewall" "allow_psc_ingress" {
 # Create a firewall rule to allow communication between GKE and Vector Search
 resource "google_compute_firewall" "allow_internal_communication" {
   count   = var.enable_psc_support && local.using_custom_network ? 1 : 0
-  name    = "allow-internal-network-communication"
+  name    = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-allow-internal-network-communication"
   network = local.network_name
   project = var.project_id
 

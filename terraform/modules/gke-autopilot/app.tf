@@ -15,40 +15,71 @@ locals {
   resource_prefix = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}"
 }
 
-# First binding - just for the GCP service account
 resource "google_project_iam_binding" "aiplatform_viewer_binding" {
   project = var.project_id
-  role    = "roles/aiplatform.viewer"
+  role    = "roles/aiplatform.viewer"  
   members = [
     "serviceAccount:${google_service_account.service_account.email}",
   ]
 }
 
-# Second binding - for the Kubernetes service account, applied later
-# You can comment this out initially and apply it after the cluster is fully ready
 resource "google_project_iam_member" "aiplatform_viewer_k8s_binding" {
   project = var.project_id
   role    = "roles/aiplatform.viewer"
-  member  = "principal://iam.googleapis.com/projects/${var.project_number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/default/sa/default"
+  member  = "serviceAccount:${var.project_id}.svc.id.goog[default/default]"  # Standard format
 
   depends_on = [
-    google_container_cluster.ltf_autopilot_cluster,
-    # Add a time delay or another indicator that the cluster is fully ready
+    google_container_cluster.ltf_autopilot_cluster
   ]
 }
+
+# Create a Kubernetes namespace specific to this deployment to avoid Workload Identity conflicts
+resource "kubernetes_namespace" "locust_namespace" {
+  metadata {
+    name = "${local.resource_prefix}-ns"
+  }
+  
+  depends_on = [
+    google_container_cluster.ltf_autopilot_cluster
+  ]
+}
+
+# Create a dedicated Kubernetes service account for this deployment
+resource "kubernetes_service_account" "locust_service_account" {
+  metadata {
+    name      = "${local.resource_prefix}-sa"
+    namespace = kubernetes_namespace.locust_namespace.metadata[0].name
+    
+    # Add annotation for Workload Identity
+    annotations = {
+      "iam.gke.io/gcp-service-account" = google_service_account.service_account.email
+    }
+  }
+  
+  depends_on = [
+    kubernetes_namespace.locust_namespace
+  ]
+}
+
 resource "kubernetes_config_map" "locust_config" {
   metadata {
-    name = "${local.resource_prefix}-config"
+    name      = "${local.resource_prefix}-config"
+    namespace = kubernetes_namespace.locust_namespace.metadata[0].name
   }
 
   data = {
     "locust_config.env" = file("${path.module}/../../../config/locust_config.env")
   }
+  
+  depends_on = [
+    kubernetes_namespace.locust_namespace
+  ]
 }
 
 resource "kubernetes_deployment" "locust_master" {
   metadata {
-    name = "${local.resource_prefix}-master"
+    name      = "${local.resource_prefix}-master"
+    namespace = kubernetes_namespace.locust_namespace.metadata[0].name
   }
   spec {
     selector {
@@ -63,14 +94,16 @@ resource "kubernetes_deployment" "locust_master" {
         }
       }
       spec {
+        service_account_name            = kubernetes_service_account.locust_service_account.metadata[0].name
         automount_service_account_token = true
-          volume {
-            name = "${local.resource_prefix}-config"
-            config_map {
-              name = kubernetes_config_map.locust_config.metadata[0].name
-              default_mode = "0644"
-            }
+        
+        volume {
+          name = "${local.resource_prefix}-config"
+          config_map {
+            name = kubernetes_config_map.locust_config.metadata[0].name
+            default_mode = "0644"
           }
+        }
         container {
           image = var.image
           name  = "locust-master"
@@ -96,11 +129,16 @@ resource "kubernetes_deployment" "locust_master" {
       }
     }
   }
+  
+  depends_on = [
+    kubernetes_service_account.locust_service_account
+  ]
 }
 
 resource "kubernetes_deployment" "locust_worker" {
   metadata {
-    name = "${local.resource_prefix}-worker"
+    name      = "${local.resource_prefix}-worker"
+    namespace = kubernetes_namespace.locust_namespace.metadata[0].name
   }
   spec {
     selector {
@@ -115,15 +153,16 @@ resource "kubernetes_deployment" "locust_worker" {
         }
       }
       spec {
+        service_account_name            = kubernetes_service_account.locust_service_account.metadata[0].name
         automount_service_account_token = true
 
         volume {
-            name = "${local.resource_prefix}-config"
-            config_map {
-              name = kubernetes_config_map.locust_config.metadata[0].name
-              default_mode = "0644"
-            }
+          name = "${local.resource_prefix}-config"
+          config_map {
+            name = kubernetes_config_map.locust_config.metadata[0].name
+            default_mode = "0644"
           }
+        }
         container {
           image = var.image
           name  = "locust-worker"
@@ -142,11 +181,16 @@ resource "kubernetes_deployment" "locust_worker" {
       }
     }
   }
+  
+  depends_on = [
+    kubernetes_service_account.locust_service_account
+  ]
 }
 
 resource "kubernetes_service" "locust_master" {
   metadata {
-    name = "${local.resource_prefix}-master"
+    name      = "${local.resource_prefix}-master"
+    namespace = kubernetes_namespace.locust_namespace.metadata[0].name
     labels = {
       app = "${local.resource_prefix}-master"
     }
@@ -175,7 +219,8 @@ resource "kubernetes_service" "locust_master" {
 
 resource "kubernetes_service" "locust_master_web" {
   metadata {
-    name = "${local.resource_prefix}-master-web"
+    name      = "${local.resource_prefix}-master-web"
+    namespace = kubernetes_namespace.locust_namespace.metadata[0].name
     annotations = {
       "networking.gke.io/load-balancer-type" = "Internal"
     }
@@ -198,7 +243,8 @@ resource "kubernetes_service" "locust_master_web" {
 
 resource "kubernetes_horizontal_pod_autoscaler" "locust_worker_autoscaler" {
   metadata {
-    name = "${local.resource_prefix}-worker-autoscaler"
+    name      = "${local.resource_prefix}-worker-autoscaler"
+    namespace = kubernetes_namespace.locust_namespace.metadata[0].name
   }
 
   spec {

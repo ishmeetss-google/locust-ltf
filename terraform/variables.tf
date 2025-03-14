@@ -205,13 +205,16 @@ variable "peering_prefix_length" {
 # For backwards compatibility - these will be derived from the above
 locals {
   # Convert to the old variable formats for use in modules that haven't been updated
-  endpoint_network = var.endpoint_access.type != "public" ? (
+  endpoint_network = var.network_configuration.network_name != "" ? (
     "projects/${var.project_id}/global/networks/${var.network_configuration.network_name}"
-  ) : null
+  ) : "projects/${var.project_id}/global/networks/default"
   
   endpoint_public_endpoint_enabled = var.endpoint_access.type == "public"
   endpoint_enable_private_service_connect = var.endpoint_access.type == "private_service_connect"
   enable_vpc_peering = var.endpoint_access.type == "vpc_peering"
+
+  # Only use subnetwork when it's specifically set and compatible with the network
+  subnetwork = var.network_configuration.subnetwork
 
   # GKE-specific settings derived from our new variables
   use_private_endpoint = var.endpoint_access.type == "private_service_connect" ? (
@@ -219,7 +222,6 @@ locals {
   ) : false
   
   # These are just direct pass-throughs
-  subnetwork = var.network_configuration.subnetwork
   master_ipv4_cidr_block = var.network_configuration.master_ipv4_cidr_block
   gke_pod_subnet_range = var.network_configuration.pod_subnet_range
   gke_service_subnet_range = var.network_configuration.service_subnet_range
@@ -267,7 +269,7 @@ variable "endpoint_enable_private_service_connect" {
   default     = false # Default to no PSC
 }
 
-variable "psc_network_name" {
+variable "vpc_network_name" {
   type        = string
   description = "[DEPRECATED] Use network_configuration.network_name instead. The name of the network to use for PSC."
   default     = "vertex-psc-network"
