@@ -30,7 +30,7 @@ fi
 export TF_VAR_endpoint_access="{\"type\":\"${ENDPOINT_ACCESS_TYPE}\"}"
 
 # Configure simplified network settings
-NETWORK_CONFIG="{\"network_name\":\"${PSC_NETWORK_NAME:-default}\""
+NETWORK_CONFIG="{\"network_name\":\"${VPC_NETWORK_NAME:-default}\""
 [[ -n "${SUBNETWORK}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"subnetwork\":\"${SUBNETWORK}\""
 [[ -n "${MASTER_IPV4_CIDR_BLOCK}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"master_ipv4_cidr_block\":\"${MASTER_IPV4_CIDR_BLOCK}\""
 [[ -n "${GKE_POD_SUBNET_RANGE}" ]] && NETWORK_CONFIG="${NETWORK_CONFIG},\"pod_subnet_range\":\"${GKE_POD_SUBNET_RANGE}\""
@@ -62,7 +62,7 @@ echo "Index Dimensions: $INDEX_DIMENSIONS"
 echo "Project Number: $PROJECT_NUMBER"
 echo "Deployment ID: $DEPLOYMENT_ID"
 echo "Endpoint Access Type: $ENDPOINT_ACCESS_TYPE"
-echo "Network Name: ${NETWORK_NAME:-default}"
+echo "Network Name: ${VPC_NETWORK_NAME:-default}"
 [[ -n "${SUBNETWORK}" ]] && echo "Subnetwork: $SUBNETWORK"
 echo "Blended Search: $blended_search"
 echo "==================================="
@@ -135,7 +135,7 @@ region         = "${REGION}"
 project_number = "${PROJECT_NUMBER}"
 deployment_id  = "${DEPLOYMENT_ID}"
 locust_test_type = "${LOCUST_TEST_TYPE}"
-network = "${NETWORK}"
+network = "${VPC_NETWORK_NAME}"
 EOF
 
 # Check if we're using an existing index or need to create a new one
