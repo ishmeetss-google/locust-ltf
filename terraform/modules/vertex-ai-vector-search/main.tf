@@ -101,11 +101,6 @@ resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
     }
   }
 
-    # Add dependency on VPC peering connection if it's provided
-  depends_on = compact([
-    var.vpc_peering_connection != null ? var.vpc_peering_connection : ""
-  ])
-
   timeouts {
     create = var.endpoint_create_timeout
     update = var.endpoint_update_timeout
