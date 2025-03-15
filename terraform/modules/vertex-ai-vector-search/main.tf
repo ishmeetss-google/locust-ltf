@@ -10,6 +10,7 @@ locals {
   }"
 }
 
+
 # -----------------------------------------------------------------------------
 # Vertex AI Index Resource
 # -----------------------------------------------------------------------------
@@ -69,8 +70,8 @@ locals {
   
   # Service connection handling
   is_public_endpoint = var.endpoint_public_endpoint_enabled
-  is_psc_enabled = var.endpoint_enable_private_service_connect
-  network_config = var.endpoint_enable_private_service_connect ? null : var.endpoint_network
+  is_psc_enabled = var.enable_private_service_connect
+  network_config = var.enable_vpc_peering ? var.endpoint_network : null
 }
 
 # -----------------------------------------------------------------------------
@@ -90,7 +91,7 @@ resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
   # For VPC peering, use network parameter but not PSC config
   # For PSC, don't set network but add PSC config
   # For public, don't set either
-  network = var.endpoint_enable_private_service_connect ? null : var.endpoint_network
+  network = local.network_config
 
   # Only set private_service_connect_config if PSC is enabled
   dynamic "private_service_connect_config" {

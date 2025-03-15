@@ -67,7 +67,7 @@ DEPLOYED_INDEX_DEDICATED_MACHINE_TYPE="e2-standard-16"  # Machine type for dedic
 # GKE and PSC Network Configuration (only needed when ENDPOINT_ACCESS_TYPE="private_service_connect")
 # VPC_NETWORK_NAME="vertex-psc-network"     # Network name to use for PSC
 # SUBNETWORK=""                             # Format: projects/{project}/regions/{region}/subnetworks/{subnetwork}
-# MASTER_IPV4_CIDR_BLOCK="172.16.0.0/28"    # IP range for GKE master
+# MASTER_IPV4_CIDR_BLOCK="172.16.0.0/28"    # IP range for GKE master -- Change from 172.16.0.0/28 to the next /28 block when deploying a second GKE Instance
 # GKE_POD_SUBNET_RANGE="10.4.0.0/14"        # IP range for GKE pods
 # GKE_SERVICE_SUBNET_RANGE="10.0.32.0/20"   # IP range for GKE services
 

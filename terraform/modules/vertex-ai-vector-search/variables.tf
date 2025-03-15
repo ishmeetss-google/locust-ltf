@@ -164,16 +164,16 @@ variable "endpoint_public_endpoint_enabled" {
   default     = true
 }
 
-variable "endpoint_enable_private_service_connect" {
-  type        = bool
-  description = "Enable Private Service Connect (PSC) for the Index Endpoint."
-  default     = false
-}
-
 variable "endpoint_network" {
   type        = string
   description = "The full name of the Google Compute Engine network (for VPC Peering)."
   default     = null
+}
+
+variable "subnetwork" {
+  type        = string
+  description = "The subnetwork to host the psc_address"
+  default     = ""
 }
 
 variable "endpoint_create_timeout" {
@@ -270,19 +270,41 @@ variable "deployed_index_delete_timeout" {
 # -----------------------------------------------------------------------------
 # Additional VPC Peering Variables 
 # -----------------------------------------------------------------------------
-variable "vpc_peering_connection" {
-  description = "ID of the VPC peering connection (only required for vpc_peering access type)"
+
+
+variable "enable_vpc_peering" {
+  type        = bool
+  description = "Enable/disable VPC peering for the Index Endpoint."
+  default     = true
+}
+
+# VPC Peering Variables
+variable "peering_range_name" {
+  description = "Name for the reserved IP range for VPC peering"
   type        = string
-  default     = null
+  default     = "vs-peering-range"
+}
+
+variable "peering_prefix_length" {
+  description = "Prefix length for the reserved IP range (e.g., 16 for /16 CIDR block)"
+  type        = number
+  default     = 16
 }
 
 # -----------------------------------------------------------------------------
 # Additional PSC Variables 
 # -----------------------------------------------------------------------------
+
+variable "enable_private_service_connect" {
+  type        = bool
+  description = "Enable Private Service Connect (PSC) for the Index Endpoint."
+  default     = false
+}
+
 variable "enable_access_logging" {
   description = "Whether to enable access logging for the private endpoint"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "deployment_group" {

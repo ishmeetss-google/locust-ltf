@@ -41,6 +41,12 @@ output "service_attachment" {
   )
 }
 
+# Only output PSC address information when PSC is enabled
+output "psc_address_ip" {
+  description = "The IP address allocated for PSC"
+  value       = var.enable_private_service_connect && length(google_compute_address.psc_address) > 0 ? google_compute_address.psc_address[0].address : null
+}
+
 output "match_grpc_address" {
   description = "The private gRPC address for sending match requests"
   value = try(

@@ -46,17 +46,17 @@ output "vector_search_match_grpc_address" {
 # Only output PSC address information when PSC is enabled
 output "psc_address_ip" {
   description = "The IP address allocated for PSC"
-  value       = var.endpoint_access.type == "private_service_connect" && length(google_compute_address.psc_address) > 0 ? google_compute_address.psc_address[0].address : null
+  value       = module.vector_search.psc_address_ip
 }
 
-output "psc_forwarding_rule" {
-  description = "The PSC forwarding rule details" 
-  value       = var.endpoint_access.type == "private_service_connect" ? {
-    name    = google_compute_forwarding_rule.psc_forwarding_rule[0].name
-    ip      = google_compute_address.psc_address[0].address
-    network = google_compute_forwarding_rule.psc_forwarding_rule[0].network
-  } : null
-}
+# output "psc_forwarding_rule" {
+#   description = "The PSC forwarding rule details" 
+#   value       = var.endpoint_access.type == "private_service_connect" ? {
+#     name    = google_compute_forwarding_rule.psc_forwarding_rule[0].name
+#     ip      = google_compute_address.psc_address[0].address
+#     network = google_compute_forwarding_rule.psc_forwarding_rule[0].network
+#   } : null
+# }
 
 # -----------------------------------------------------------------------------
 # Access Instructions
@@ -67,19 +67,19 @@ output "locust_ui_access_instructions" {
 }
 
 # Combined output for scripting use cases
-output "vector_search_connection_info" {
-  description = "Complete connection information for Vector Search"
-  value = {
-    endpoint_access_type = var.endpoint_access.type
-    public_endpoint = module.vector_search.public_endpoint_domain_name
-    psc_enabled = module.vector_search.psc_enabled
-    psc_ip_address = var.endpoint_access.type == "private_service_connect" && length(google_compute_address.psc_address) > 0 ? google_compute_address.psc_address[0].address : null
-    match_grpc_address = module.vector_search.match_grpc_address
-    endpoint_id = module.vector_search.endpoint_id
-    deployed_index_id = module.vector_search.deployed_index_id
-    network_name = var.network_configuration.network_name
-  }
-}
+# output "vector_search_connection_info" {
+#   description = "Complete connection information for Vector Search"
+#   value = {
+#     endpoint_access_type = var.endpoint_access.type
+#     public_endpoint = module.vector_search.public_endpoint_domain_name
+#     psc_enabled = module.vector_search.psc_enabled
+#     psc_ip_address = var.endpoint_access.type == "private_service_connect" && length(google_compute_address.psc_address) > 0 ? google_compute_address.psc_address[0].address : null
+#     match_grpc_address = module.vector_search.match_grpc_address
+#     endpoint_id = module.vector_search.endpoint_id
+#     deployed_index_id = module.vector_search.deployed_index_id
+#     network_name = var.network_configuration.network_name
+#   }
+# }
 
 output "locust_master_svc_name" {
   description = "The name of the Locust master service"
