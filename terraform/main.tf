@@ -20,43 +20,43 @@ module "vector_search" {
   existing_bucket_name = var.existing_bucket_name
 
   # Index configuration
-  vector_search_index_id              = var.vector_search_index_id
-  embedding_data_path                 = var.embedding_data_path
-  index_display_name                  = var.index_display_name
-  index_description                   = var.index_description
-  index_labels                        = var.index_labels
-  index_dimensions                    = var.index_dimensions
-  index_approximate_neighbors_count   = var.index_approximate_neighbors_count
-  index_distance_measure_type         = var.index_distance_measure_type
-  index_shard_size                    = var.index_shard_size
-  feature_norm_type                   = var.feature_norm_type
-  index_algorithm_config_type         = var.index_algorithm_config_type
-  
+  vector_search_index_id            = var.vector_search_index_id
+  embedding_data_path               = var.embedding_data_path
+  index_display_name                = var.index_display_name
+  index_description                 = var.index_description
+  index_labels                      = var.index_labels
+  index_dimensions                  = var.index_dimensions
+  index_approximate_neighbors_count = var.index_approximate_neighbors_count
+  index_distance_measure_type       = var.index_distance_measure_type
+  index_shard_size                  = var.index_shard_size
+  feature_norm_type                 = var.feature_norm_type
+  index_algorithm_config_type       = var.index_algorithm_config_type
+
   # Index tree configuration
   index_tree_ah_leaf_node_embedding_count    = var.index_tree_ah_leaf_node_embedding_count
   index_tree_ah_leaf_nodes_to_search_percent = var.index_tree_ah_leaf_nodes_to_search_percent
-  
+
   # Index management settings
-  index_update_method   = var.index_update_method
-  index_create_timeout  = var.index_create_timeout
-  index_update_timeout  = var.index_update_timeout
-  index_delete_timeout  = var.index_delete_timeout
+  index_update_method  = var.index_update_method
+  index_create_timeout = var.index_create_timeout
+  index_update_timeout = var.index_update_timeout
+  index_delete_timeout = var.index_delete_timeout
 
   # Endpoint configuration - use the derived locals from consolidated variables
-  endpoint_display_name                   = var.endpoint_display_name
-  endpoint_description                    = var.endpoint_description
-  endpoint_labels                         = var.endpoint_labels
-  endpoint_public_endpoint_enabled        = local.endpoint_public_endpoint_enabled
-  endpoint_network                        = local.endpoint_network
-  subnetwork                              = var.network_configuration.subnetwork
-  enable_private_service_connect          = local.endpoint_enable_private_service_connect
+  endpoint_display_name            = var.endpoint_display_name
+  endpoint_description             = var.endpoint_description
+  endpoint_labels                  = var.endpoint_labels
+  endpoint_public_endpoint_enabled = local.endpoint_public_endpoint_enabled
+  endpoint_network                 = local.endpoint_network
+  subnetwork                       = var.network_configuration.subnetwork
+  enable_private_service_connect   = local.endpoint_enable_private_service_connect
   # Add this parameter to pass VPC peering connection dependency
-  enable_vpc_peering                      = local.enable_vpc_peering
-  peering_range_name                      = var.peering_range_name
-  peering_prefix_length                   = var.peering_prefix_length
-  endpoint_create_timeout                 = var.endpoint_create_timeout
-  endpoint_update_timeout                 = var.endpoint_update_timeout
-  endpoint_delete_timeout                 = var.endpoint_delete_timeout
+  enable_vpc_peering      = local.enable_vpc_peering
+  peering_range_name      = var.peering_range_name
+  peering_prefix_length   = var.peering_prefix_length
+  endpoint_create_timeout = var.endpoint_create_timeout
+  endpoint_update_timeout = var.endpoint_update_timeout
+  endpoint_delete_timeout = var.endpoint_delete_timeout
 
   # Deployed index configuration
   deployed_index_id                     = var.deployed_index_id
@@ -72,7 +72,6 @@ module "vector_search" {
   deployed_index_delete_timeout         = var.deployed_index_delete_timeout
   deployment_id                         = var.deployment_id
 }
-
 module "gke_autopilot" {
   source           = "./modules/gke-autopilot"
   project_id       = var.project_id
@@ -83,12 +82,12 @@ module "gke_autopilot" {
   locust_test_type = var.locust_test_type
 
   # Use simplified network configuration from locals
-  network               = local.endpoint_network
-  subnetwork            = local.subnetwork
-  enable_psc_support    = local.endpoint_enable_private_service_connect
-  use_private_endpoint  = false
-  master_ipv4_cidr_block = local.master_ipv4_cidr_block
-  gke_pod_subnet_range   = local.gke_pod_subnet_range
+  network                  = local.endpoint_network
+  subnetwork               = local.subnetwork
+  enable_psc_support       = local.endpoint_enable_private_service_connect
+  use_private_endpoint     = false
+  master_ipv4_cidr_block   = local.master_ipv4_cidr_block
+  gke_pod_subnet_range     = local.gke_pod_subnet_range
   gke_service_subnet_range = local.gke_service_subnet_range
 }
 
@@ -109,7 +108,7 @@ resource "google_compute_instance" "nginx_proxy" {
     network = local.endpoint_enable_private_service_connect ? (
       var.network_configuration.network_name
     ) : "default"
-    
+
     subnetwork = local.subnetwork != "" ? local.subnetwork : null
 
     # Only add public IP if not using private endpoints
@@ -120,7 +119,7 @@ resource "google_compute_instance" "nginx_proxy" {
       }
     }
   }
-  
+
   metadata = {
     gce-container-declaration = <<EOT
 spec:

@@ -154,18 +154,18 @@ variable "index_delete_timeout" {
 variable "network_configuration" {
   type = object({
     # Network settings
-    network_name = optional(string, "default")  # Just the name, not the full path
-    
+    network_name = optional(string, "default") # Just the name, not the full path
+
     # Subnetwork settings (only needed for PSC/private endpoints)
-    subnetwork = optional(string, "")    # Full path to subnetwork if needed
-    
+    subnetwork = optional(string, "") # Full path to subnetwork if needed
+
     # GKE cluster network configuration
     master_ipv4_cidr_block = optional(string, "172.16.0.0/28")
-    pod_subnet_range = optional(string, "10.4.0.0/14")
-    service_subnet_range = optional(string, "10.0.32.0/20")
+    pod_subnet_range       = optional(string, "10.4.0.0/14")
+    service_subnet_range   = optional(string, "10.0.32.0/20")
   })
   description = "Network configuration for the deployment"
-  default = {}
+  default     = {}
 }
 
 # -----------------------------------------------------------------------------
@@ -174,17 +174,17 @@ variable "network_configuration" {
 variable "endpoint_access" {
   type = object({
     # Main access type setting (simplified from the previous two booleans)
-    type = string  # "public", "vpc_peering", or "private_service_connect"
-    
+    type = string # "public", "vpc_peering", or "private_service_connect"
+
     # Settings for private service connect (only used when type = "private_service_connect")
-    use_private_endpoint = optional(bool, true)  # Whether to use private IP for GKE master
+    use_private_endpoint = optional(bool, true) # Whether to use private IP for GKE master
   })
   description = "Access configuration for the Vector Search endpoint"
   default = {
     type = "public"
   }
   validation {
-    condition = contains(["public", "private_vpc", "private_service_connect"], var.endpoint_access.type)
+    condition     = contains(["public", "private_vpc", "private_service_connect"], var.endpoint_access.type)
     error_message = "endpoint_access.type must be one of: 'public', 'private_vpc', or 'private_service_connect'."
   }
 }
@@ -208,10 +208,10 @@ locals {
   endpoint_network = var.network_configuration.network_name != "" ? (
     "projects/${var.project_id}/global/networks/${var.network_configuration.network_name}"
   ) : "projects/${var.project_id}/global/networks/default"
-  
-  endpoint_public_endpoint_enabled = var.endpoint_access.type == "public"
+
+  endpoint_public_endpoint_enabled        = var.endpoint_access.type == "public"
   endpoint_enable_private_service_connect = var.endpoint_access.type == "private_service_connect"
-  enable_vpc_peering = var.endpoint_access.type == "vpc_peering"
+  enable_vpc_peering                      = var.endpoint_access.type == "vpc_peering"
 
   # Only use subnetwork when it's specifically set and compatible with the network
   subnetwork = var.network_configuration.subnetwork
@@ -220,10 +220,10 @@ locals {
   use_private_endpoint = var.endpoint_access.type == "private_service_connect" ? (
     var.endpoint_access.use_private_endpoint
   ) : false
-  
+
   # These are just direct pass-throughs
-  master_ipv4_cidr_block = var.network_configuration.master_ipv4_cidr_block
-  gke_pod_subnet_range = var.network_configuration.pod_subnet_range
+  master_ipv4_cidr_block   = var.network_configuration.master_ipv4_cidr_block
+  gke_pod_subnet_range     = var.network_configuration.pod_subnet_range
   gke_service_subnet_range = var.network_configuration.service_subnet_range
 }
 
@@ -420,7 +420,7 @@ variable "locust_test_type" {
   description = "The type of load test to run (http or grpc)"
   type        = string
   default     = "http"
-  
+
   validation {
     condition     = contains(["http", "grpc"], var.locust_test_type)
     error_message = "The locust_test_type must be either 'http' or 'grpc'."

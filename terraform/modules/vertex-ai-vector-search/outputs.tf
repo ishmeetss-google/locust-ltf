@@ -67,8 +67,8 @@ output "psc_automated_endpoints" {
 output "endpoint_access_info" {
   description = "Endpoint access information"
   value = {
-    is_public = local.is_public_endpoint
+    is_public      = local.is_public_endpoint
     is_psc_enabled = local.is_psc_enabled
-    network = var.endpoint_network
+    network        = var.endpoint_network
   }
 }

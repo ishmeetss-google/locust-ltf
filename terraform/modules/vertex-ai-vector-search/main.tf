@@ -3,11 +3,9 @@
 locals {
   # Create a valid resource prefix from the deployment_id
   # Ensures it starts with a letter and only contains letters, numbers, and underscores
-  clean_deployment_id = "${
-    length(regexall("^[a-zA-Z]", var.deployment_id)) > 0 
-      ? lower(replace(var.deployment_id, "/[^a-zA-Z0-9_]+/", "")) 
-      : "idx_${lower(replace(var.deployment_id, "/[^a-zA-Z0-9_]+/", ""))}"
-  }"
+  clean_deployment_id = (length(regexall("^[a-zA-Z]", var.deployment_id)) > 0
+    ? lower(replace(var.deployment_id, "/[^a-zA-Z0-9_]+/", ""))
+  : "idx_${lower(replace(var.deployment_id, "/[^a-zA-Z0-9_]+/", ""))}")
 }
 
 
@@ -67,22 +65,22 @@ locals {
   index_id = var.vector_search_index_id != null ? var.vector_search_index_id : (
     length(google_vertex_ai_index.vector_index) > 0 ? google_vertex_ai_index.vector_index[0].id : null
   )
-  
+
   # Service connection handling
   is_public_endpoint = var.endpoint_public_endpoint_enabled
-  is_psc_enabled = var.enable_private_service_connect
-  network_config = var.enable_vpc_peering ? var.endpoint_network : null
+  is_psc_enabled     = var.enable_private_service_connect
+  network_config     = var.enable_vpc_peering ? var.endpoint_network : null
 }
 
 # -----------------------------------------------------------------------------
 # Vertex AI Index Endpoint Resource
 # -----------------------------------------------------------------------------
 resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
-  project                 = var.project_id
-  region                  = var.region
-  display_name            = "${var.endpoint_display_name}-${local.clean_deployment_id}"
-  description             = var.endpoint_description
-  labels                  = var.endpoint_labels
+  project      = var.project_id
+  region       = var.region
+  display_name = "${var.endpoint_display_name}-${local.clean_deployment_id}"
+  description  = var.endpoint_description
+  labels       = var.endpoint_labels
 
 
   # Use different network settings based on access type

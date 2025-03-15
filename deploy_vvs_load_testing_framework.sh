@@ -180,7 +180,12 @@ gcloud services enable aiplatform.googleapis.com \
 
 # Create Artifact Registry repository
 echo "Creating Artifact Registry repository..."
-gcloud artifacts repositories create locust-docker-repo --repository-format=docker --location="${REGION}" --project="${PROJECT_ID}" || true
+if ! gcloud artifacts repositories describe locust-docker-repo --location="${REGION}" --project="${PROJECT_ID}" &>/dev/null; then
+  echo "Creating Artifact Registry repository..."
+  gcloud artifacts repositories create locust-docker-repo --repository-format=docker --location="${REGION}" --project="${PROJECT_ID}"
+else
+  echo "Artifact Registry repository already exists."
+fi
 
 # Create config directory
 mkdir -p config

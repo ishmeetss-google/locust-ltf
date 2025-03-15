@@ -10,10 +10,10 @@ terraform {
 
 # Create PSC address only when using Private Service Connect
 resource "google_compute_address" "psc_address" {
-  count        = var.enable_private_service_connect ? 1 : 0
-  name         = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-ltf-psc-address"
-  region       = var.region
-  project      = var.project_id
+  count   = var.enable_private_service_connect ? 1 : 0
+  name    = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-ltf-psc-address"
+  region  = var.region
+  project = var.project_id
   # Use subnetwork directly from network_configuration
   subnetwork   = var.subnetwork
   address_type = "INTERNAL"
@@ -29,7 +29,7 @@ resource "google_compute_forwarding_rule" "psc_forwarding_rule" {
   project               = var.project_id
   network               = var.endpoint_network
   ip_address            = google_compute_address.psc_address[0].self_link
-  target                = google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.private_endpoints[0].service_attachment 
+  target                = google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.private_endpoints[0].service_attachment
   load_balancing_scheme = ""
   depends_on            = [google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index]
 }
@@ -51,7 +51,7 @@ resource "google_service_networking_connection" "vpc_peering_connection" {
   network                 = var.endpoint_network
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [google_compute_global_address.vpc_peering_range[0].name]
-  
+
   # Workaround to allow `terraform destroy`, see https://github.com/hashicorp/terraform-provider-google/issues/18729
-  deletion_policy         = "ABANDON"
+  deletion_policy = "ABANDON"
 }

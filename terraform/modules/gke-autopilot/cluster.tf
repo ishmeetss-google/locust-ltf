@@ -14,7 +14,7 @@ locals {
 
   # For naming resources
   cluster_name = "ltf-autopilot-cluster"
-  
+
   # Create namespace+SA identifier for Workload Identity
   k8s_namespace = "${local.resource_prefix}-ns"
   k8s_sa_name   = "${local.resource_prefix}-sa"
@@ -121,7 +121,7 @@ resource "google_container_cluster" "ltf_autopilot_cluster" {
       # Without specifying any networks, access is blocked from everywhere
       # You need to add at least one CIDR range that should have access
       cidr_blocks {
-        cidr_block   = "10.0.0.0/8"  # This allows access from your VPC network
+        cidr_block   = "10.0.0.0/8" # This allows access from your VPC network
         display_name = "VPC Networks"
       }
     }

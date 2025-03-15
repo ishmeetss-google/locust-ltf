@@ -12,12 +12,18 @@ provider "kubernetes" {
 }
 
 locals {
-  resource_prefix = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}"
+  resource_prefix = lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))
+  user_class_map = {
+    "http" = "HttpVectorSearchUser"
+    "grpc" = "GrpcVectorSearchUser"
+  }
+
+  user_class = local.user_class_map[var.locust_test_type]
 }
 
 resource "google_project_iam_binding" "aiplatform_viewer_binding" {
   project = var.project_id
-  role    = "roles/aiplatform.viewer"  
+  role    = "roles/aiplatform.viewer"
   members = [
     "serviceAccount:${google_service_account.service_account.email}",
   ]
@@ -26,7 +32,7 @@ resource "google_project_iam_binding" "aiplatform_viewer_binding" {
 resource "google_project_iam_member" "aiplatform_viewer_k8s_binding" {
   project = var.project_id
   role    = "roles/aiplatform.viewer"
-  member  = "serviceAccount:${var.project_id}.svc.id.goog[default/default]"  # Standard format
+  member  = "serviceAccount:${var.project_id}.svc.id.goog[default/default]" # Standard format
 
   depends_on = [
     google_container_cluster.ltf_autopilot_cluster
@@ -38,7 +44,7 @@ resource "kubernetes_namespace" "locust_namespace" {
   metadata {
     name = "${local.resource_prefix}-ns"
   }
-  
+
   depends_on = [
     google_container_cluster.ltf_autopilot_cluster
   ]
@@ -49,13 +55,13 @@ resource "kubernetes_service_account" "locust_service_account" {
   metadata {
     name      = "${local.resource_prefix}-sa"
     namespace = kubernetes_namespace.locust_namespace.metadata[0].name
-    
+
     # Add annotation for Workload Identity
     annotations = {
       "iam.gke.io/gcp-service-account" = google_service_account.service_account.email
     }
   }
-  
+
   depends_on = [
     kubernetes_namespace.locust_namespace
   ]
@@ -70,7 +76,7 @@ resource "kubernetes_config_map" "locust_config" {
   data = {
     "locust_config.env" = file("${path.module}/../../../config/locust_config.env")
   }
-  
+
   depends_on = [
     kubernetes_namespace.locust_namespace
   ]
@@ -96,11 +102,11 @@ resource "kubernetes_deployment" "locust_master" {
       spec {
         service_account_name            = kubernetes_service_account.locust_service_account.metadata[0].name
         automount_service_account_token = true
-        
+
         volume {
           name = "${local.resource_prefix}-config"
           config_map {
-            name = kubernetes_config_map.locust_config.metadata[0].name
+            name         = kubernetes_config_map.locust_config.metadata[0].name
             default_mode = "0644"
           }
         }
@@ -112,7 +118,7 @@ resource "kubernetes_deployment" "locust_master" {
             mount_path = "/tasks/locust_config.env"
             sub_path   = "locust_config.env"
           }
-          args = ["-f", "/tasks/locust.py", "--master", "--class-picker", "--tags=${var.locust_test_type}"]
+          args = ["-f", "/tasks/locust.py", "--master", "--class-picker", "--tags=${var.locust_test_type}", "${local.user_class}"]
           port {
             container_port = 8089
             name           = "loc-master-web"
@@ -129,7 +135,7 @@ resource "kubernetes_deployment" "locust_master" {
       }
     }
   }
-  
+
   depends_on = [
     kubernetes_service_account.locust_service_account
   ]
@@ -159,7 +165,7 @@ resource "kubernetes_deployment" "locust_worker" {
         volume {
           name = "${local.resource_prefix}-config"
           config_map {
-            name = kubernetes_config_map.locust_config.metadata[0].name
+            name         = kubernetes_config_map.locust_config.metadata[0].name
             default_mode = "0644"
           }
         }
@@ -171,7 +177,7 @@ resource "kubernetes_deployment" "locust_worker" {
             mount_path = "/tasks/locust_config.env"
             sub_path   = "locust_config.env"
           }
-          args = ["-f", "/tasks/locust.py", "--worker", "--master-host", "${local.resource_prefix}-master", "--tags=${var.locust_test_type}"]
+          args = ["-f", "/tasks/locust.py", "--worker", "--master-host", "${local.resource_prefix}-master", "--tags=${var.locust_test_type}", "${local.user_class}"]
           resources {
             requests = {
               cpu = "1000m"
@@ -181,7 +187,7 @@ resource "kubernetes_deployment" "locust_worker" {
       }
     }
   }
-  
+
   depends_on = [
     kubernetes_service_account.locust_service_account
   ]
@@ -253,8 +259,8 @@ resource "kubernetes_horizontal_pod_autoscaler" "locust_worker_autoscaler" {
 
     scale_target_ref {
       api_version = "apps/v1"
-      kind = "Deployment"
-      name = "${local.resource_prefix}-worker"
+      kind        = "Deployment"
+      name        = "${local.resource_prefix}-worker"
     }
     target_cpu_utilization_percentage = 50
   }
