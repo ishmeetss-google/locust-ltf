@@ -21,7 +21,6 @@ The framework provides a complete solution for testing Vector Search performance
 - **Capacity Planning**: Determine the right machine type and replica count for your production workload
 - **Scaling Validation**: Test autoscaling capabilities under varying loads
 - **Network Topology Testing**: Compare public vs. private endpoint performance
-- **Cost Optimization**: Find the most cost-effective configuration for your performance requirements
 - **Protocol Comparison**: Compare HTTP vs. gRPC performance characteristics
 - **Production Readiness**: Validate your configuration can handle expected traffic spikes
 
@@ -29,9 +28,10 @@ The framework provides a complete solution for testing Vector Search performance
 
 - Google Cloud project with billing enabled
 - `gcloud` CLI installed and configured
-- Terraform installed (v1.0.0+)
+- Terraform installed (v6.0.0+)
 - Access to create GKE clusters and Vertex AI resources
 - Permissions to create service accounts and IAM roles
+- Create Artifact Registry repository 
 
 ## Quick Start
 
@@ -52,10 +52,17 @@ For those who want to get started immediately:
    ZONE="us-central1-a"
    DEPLOYMENT_ID="vs-load-test-1"
    INDEX_DIMENSIONS=1536
-   ENDPOINT_ACCESS_TYPE="public"  # Start with public for simplicity
    
-   # Use an existing index (easier to start with):
-   VECTOR_SEARCH_INDEX_ID="projects/your-project/locations/us-central1/indexes/your-index-id"
+
+   ENDPOINT_ACCESS_TYPE="public"  # Options: "public", "private_service_connect", "vpc_peering"
+   
+   # Index source configuration (REQUIRED - choose ONE option)
+   # Option 1: Use existing index (uncomment and set value)
+   VECTOR_SEARCH_INDEX_ID="" 
+   # OR
+   # Option 2: Create new index (leave VECTOR_SEARCH_INDEX_ID commented out to use these)
+   BUCKET_NAME="your-embedding-bucket"
+   EMBEDDING_PATH="your-embedding-folder"
    ```
 
 3. Run the deployment:
@@ -77,15 +84,15 @@ The framework is highly configurable to simulate various production scenarios. H
 | `REGION` | Region for resource deployment | `"us-central1"` | All |
 | `ZONE` | Zone for compute resources | `"us-central1-a"` | All |
 | `DEPLOYMENT_ID` | Unique identifier for this deployment | `"vs-load-test-1"` | All |
-| `INDEX_DIMENSIONS` | Vector dimensions in the index | `768` (Cohere) or `1536` (OpenAI) | All |
+| `INDEX_DIMENSIONS` | Vector dimensions in the index | `768` (Default) | All |
 
 ### Deployment Topology
 
 | Parameter | Description | Example Value | Recommended For |
 |-----------|-------------|---------------|----------------|
-| `ENDPOINT_ACCESS_TYPE` | Endpoint access method | `"public"` | Simple testing, initial benchmarks |
-| | | `"private_service_connect"` | Production simulation, security-focused testing |
-| | | `"vpc_peering"` | Legacy private deployments, network isolation |
+| `ENDPOINT_ACCESS_TYPE` | Endpoint access method | `"public"` | Deployed index will be accessible through public endpoint |
+| | | `"private_service_connect"` | Configuration for private service connect. |
+| | | `"vpc_peering"` | Index endpoint should be peered with private network. |
 
 ### Index Source Configuration (Choose ONE option)
 
@@ -119,34 +126,27 @@ GKE_SERVICE_SUBNET_RANGE="10.0.32.0/20"                                 # Servic
 ```bash
 # Index configuration
 INDEX_SHARD_SIZE="SHARD_SIZE_LARGE"                   # Options: SMALL, MEDIUM, LARGE
-INDEX_APPROXIMATE_NEIGHBORS_COUNT=150                 # Impacts accuracy vs. speed
-INDEX_DISTANCE_MEASURE_TYPE="DOT_PRODUCT_DISTANCE"    # Vector similarity measure
+INDEX_APPROXIMATE_NEIGHBORS_COUNT=150                 # The default number of neighbors to find via approximate search before exact reordering is performed. Required if tree-AH algorithm is used.
+INDEX_DISTANCE_MEASURE_TYPE="DOT_PRODUCT_DISTANCE"    # The distance measure used in nearest neighbor search. The value must be one of the followings: SQUARED_L2_DISTANCE,  L1_DISTANCE, COSINE_DISTANCE, DOT_PRODUCT_DISTANCE
+
 INDEX_ALGORITHM_CONFIG_TYPE="tree_ah_config"          # Algorithm: tree_ah_config or brute_force_config
 
 # Deployed index resources
 DEPLOYED_INDEX_RESOURCE_TYPE="dedicated"                    # Options: "automatic", "dedicated"
 DEPLOYED_INDEX_DEDICATED_MACHINE_TYPE="e2-standard-16"      # Machine type
 DEPLOYED_INDEX_DEDICATED_MIN_REPLICAS=2                     # Min replica count
-DEPLOYED_INDEX_DEDICATED_MAX_REPLICAS=5                     # Max replica count (for autoscaling)
+DEPLOYED_INDEX_DEDICATED_MAX_REPLICAS=5                     # Max replica count (for dedicated)
 ```
 
 #### Blended Search (Optional)
 
-Enables testing with both dense and sparse embeddings:
+Enables testing for hybird search with both dense and sparse embeddings:
 
 ```bash
 SPARSE_EMBEDDING_NUM_DIMENSIONS=10000       # Total sparse dimensions
 SPARSE_EMBEDDING_NUM_DIMENSIONS_WITH_VALUES=200   # Non-zero dimensions per vector
 ```
 
-#### Load Testing Configuration
-
-```bash
-# Locust worker configuration for higher throughput tests
-WORKER_MIN_REPLICAS=5             # Starting worker count 
-WORKER_MAX_REPLICAS=1000          # Maximum worker count
-WORKER_CPU_THRESHOLD=30           # CPU threshold % for scaling
-```
 
 ## Production Simulation Recipes
 
@@ -154,17 +154,25 @@ Here are common configurations for simulating specific production scenarios:
 
 ### High-Throughput Public Endpoint
 
-For testing maximum QPS with public endpoints:
+For testing high QPS with public endpoints:
 
 ```bash
 ENDPOINT_ACCESS_TYPE="public"
 INDEX_SHARD_SIZE="SHARD_SIZE_LARGE"
 DEPLOYED_INDEX_RESOURCE_TYPE="dedicated"
-DEPLOYED_INDEX_DEDICATED_MACHINE_TYPE="n1-standard-32"
+DEPLOYED_INDEX_DEDICATED_MACHINE_TYPE="n2-standard-32"
 DEPLOYED_INDEX_DEDICATED_MIN_REPLICAS=5
 DEPLOYED_INDEX_DEDICATED_MAX_REPLICAS=10
-WORKER_MIN_REPLICAS=10
 ```
+
+__Locust UI Configuration__
+```
+Number of Users=1000
+Ramp Up=100
+Num Neighbors=20
+QPS per User=5
+```
+
 
 ### Secure Enterprise Deployment
 
@@ -179,22 +187,18 @@ DEPLOYED_INDEX_DEDICATED_MIN_REPLICAS=3
 DEPLOYED_INDEX_DEDICATED_MAX_REPLICAS=8
 ```
 
-### Cost-Optimized Configuration
-
-For testing the most cost-effective setup for moderate loads:
-
-```bash
-ENDPOINT_ACCESS_TYPE="public"
-INDEX_SHARD_SIZE="SHARD_SIZE_MEDIUM"
-DEPLOYED_INDEX_RESOURCE_TYPE="dedicated"
-DEPLOYED_INDEX_DEDICATED_MACHINE_TYPE="e2-standard-8"
-DEPLOYED_INDEX_DEDICATED_MIN_REPLICAS=2
-DEPLOYED_INDEX_DEDICATED_MAX_REPLICAS=5
+__Locust UI Configuration__
 ```
+Number of Users=100
+Ramp Up=100
+Num Neighbors=20
+QPS per User=5
+```
+
 
 ### Multi-Region Testing
 
-For comparing performance across regions, deploy multiple instances:
+For comparing performance across regions, deploy runs/terraform workspaces:
 
 ```bash
 # First deployment
@@ -202,7 +206,7 @@ DEPLOYMENT_ID="us-central1-test"
 REGION="us-central1"
 ZONE="us-central1-a"
 
-# Second deployment (in different terminal)
+# Second deployment (once the first deployment is done)
 DEPLOYMENT_ID="us-east1-test"
 REGION="us-east1"
 ZONE="us-east1-b"
@@ -268,7 +272,7 @@ Before running a test, define your goals:
 - **Baseline Performance**: What's the normal expected QPS?
 - **Peak Load**: What's the maximum load you need to support?
 - **Sustained Load**: What continuous load should you test?
-- **Metrics to Capture**: Response time, error rates, throughput
+- **Metrics to Capture**: Response time, error rates, client + server
 
 ### 2. Configuring Locust Tests
 
@@ -285,6 +289,10 @@ In the Locust UI:
 - **Test Duration**: Run tests long enough to observe stable behavior
   - 5-10 minutes for initial tests
   - 30+ minutes for performance validation
+
+- **Number of Neighbors**:Number of nearest neighbors to find in each query
+
+- **QPS per User**:The QPS each user should target.  Locust will try to maintain this rate, but if latency is high, actual QPS may be lower.
 
 ### 3. Monitoring During Tests
 

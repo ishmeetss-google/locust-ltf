@@ -61,10 +61,10 @@ output "psc_address_ip" {
 # -----------------------------------------------------------------------------
 # Access Instructions
 # -----------------------------------------------------------------------------
-output "locust_ui_access_instructions" {
-  description = "Instructions for accessing the Locust UI"
-  value       = "Run: gcloud compute ssh ${google_compute_instance.nginx_proxy.name} --project ${var.project_id} --zone ${google_compute_instance.nginx_proxy.zone} -- -NL 8089:localhost:8089\nThen open http://localhost:8089 in your browser"
-}
+# output "locust_ui_access_instructions" {
+#   description = "Instructions for accessing the Locust UI"
+#   value       = "Run: gcloud compute ssh ${google_compute_instance.nginx_proxy.name} --project ${var.project_id} --zone ${google_compute_instance.nginx_proxy.zone} -- -NL 8089:localhost:8089\nThen open http://localhost:8089 in your browser"
+# }
 
 # Combined output for scripting use cases
 # output "vector_search_connection_info" {
