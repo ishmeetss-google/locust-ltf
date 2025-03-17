@@ -437,29 +437,6 @@ INDEX_DIMENSIONS=384
 MASTER_IPV4_CIDR_BLOCK="172.16.0.32/28"
 ```
 
-## Performance Testing Guidelines by Role
-
-### For Customers
-
-- Start with simpler public endpoint configurations
-- Test with realistic query patterns from your application
-- Focus on cost-performance optimization
-- Validate your chosen configuration can handle expected peak loads
-
-### For CEs (Customer Engineers)
-
-- Create proof-of-concept with various configurations
-- Demonstrate different network topologies
-- Benchmark multiple machine types and replica counts
-- Use results to create sizing recommendations
-
-### For GCP Engineers
-
-- Test performance limits of different index configurations
-- Validate scaling behavior under extreme loads
-- Test complex network configurations
-- Compare performance across regions and machine types
-
 ## Cleanup
 
 To delete all resources created by this framework:
