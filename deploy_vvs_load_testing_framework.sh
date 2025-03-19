@@ -14,7 +14,7 @@ source "$CONFIG_FILE"
 
 # Generate dynamic variables
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
-DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo/locust-load-test:LTF-${TIMESTAMP}"
+DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo/locust-load-test:LTF-${DEPLOYMENT_ID}-${TIMESTAMP}"
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 
 # Set test type and endpoint access based on ENDPOINT_ACCESS_TYPE
