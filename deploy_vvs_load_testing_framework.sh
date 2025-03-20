@@ -432,6 +432,10 @@ LOCUST_NAMESPACE=""
 
 if terraform output -raw gke_cluster_name &>/dev/null; then
   DEPLOYED_CLUSTER_NAME=$(terraform output -raw gke_cluster_name)
+  # Currently in terraform directory.
+  cat << EOF >> "../${DEPLOYMENT_ID}_state.sh"
+DEPLOYED_CLUSTER_NAME=${DEPLOYED_CLUSTER_NAME}
+EOF
   echo "GKE Cluster name: $DEPLOYED_CLUSTER_NAME"
 fi
 
