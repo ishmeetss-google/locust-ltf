@@ -13,6 +13,14 @@ source "$CONFIG_FILE"
 # Determine the workspace name
 WORKSPACE_NAME="$DEPLOYMENT_ID"
 
+# Load state
+STATE_FILE="${DEPLOYMENT_ID}_state.sh"
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo "Configuration file $STATE_FILE not found!"
+  exit 1
+fi
+source "$STATE_FILE"
+
 # Terraform cleanup
 echo "Destroying Terraform resources..."
 cd terraform
@@ -23,6 +31,13 @@ if terraform workspace list | grep -q "$WORKSPACE_NAME"; then
 else
   echo "Workspace $WORKSPACE_NAME does not exist, skipping terraform destroy"
   exit 0
+fi
+
+# Configure kubectl if we have a cluster name
+if [[ -n "$DEPLOYED_CLUSTER_NAME" ]]; then
+  gcloud container clusters get-credentials $DEPLOYED_CLUSTER_NAME --project=${PROJECT_ID} --location=${REGION}
+else
+  echo "Warning: Unable to get GKE cluster name, skipping kubectl configuration"
 fi
 
 # Destroy Terraform resources
@@ -37,24 +52,11 @@ cd ..
 # Deleting Locust config
 rm -rf config
 
+# Deleting Deployment state file
+rm -rf "$STATE_FILE"
+
 # Artifact Registry Cleanup
 echo "Cleaning up Artifact Registry repository..."
 gcloud artifacts repositories delete locust-docker-repo-${DEPLOYMENT_ID} --location="$REGION" --project="$PROJECT_ID" --quiet --async
-
-
-
-# Commented out the below code becaues they might be using some of the services before using load testing framework.
-# Disable any enabled services
-# echo "Disabling services..."
-# gcloud services disable aiplatform.googleapis.com \
-#   artifactregistry.googleapis.com \
-#   compute.googleapis.com \
-#   autoscaling.googleapis.com \
-#   container.googleapis.com \
-#   iamcredentials.googleapis.com \
-#   cloudbuild.googleapis.com \
-#   iam.googleapis.com \
-#   servicenetworking.googleapis.com \
-#   --project="${PROJECT_ID}" --quiet
 
 echo "Cleanup complete."
