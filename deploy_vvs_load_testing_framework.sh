@@ -14,7 +14,7 @@ source "$CONFIG_FILE"
 
 # Generate dynamic variables
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
-DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo/locust-load-test:LTF-${TIMESTAMP}"
+DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo-${DEPLOYMENT_ID}/locust-load-test:LTF-${TIMESTAMP}"
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 
 # Set test type and endpoint access based on ENDPOINT_ACCESS_TYPE
@@ -180,9 +180,9 @@ gcloud services enable aiplatform.googleapis.com \
 
 # Create Artifact Registry repository
 echo "Creating Artifact Registry repository..."
-if ! gcloud artifacts repositories describe locust-docker-repo --location="${REGION}" --project="${PROJECT_ID}" &>/dev/null; then
+if ! gcloud artifacts repositories describe locust-docker-repo-${DEPLOYMENT_ID} --location="${REGION}" --project="${PROJECT_ID}" &>/dev/null; then
   echo "Creating Artifact Registry repository..."
-  gcloud artifacts repositories create locust-docker-repo --repository-format=docker --location="${REGION}" --project="${PROJECT_ID}"
+  gcloud artifacts repositories create locust-docker-repo-${DEPLOYMENT_ID} --repository-format=docker --location="${REGION}" --project="${PROJECT_ID}"
 else
   echo "Artifact Registry repository already exists."
 fi
@@ -432,6 +432,10 @@ LOCUST_NAMESPACE=""
 
 if terraform output -raw gke_cluster_name &>/dev/null; then
   DEPLOYED_CLUSTER_NAME=$(terraform output -raw gke_cluster_name)
+  # Currently in terraform directory.
+  cat << EOF >> "../${DEPLOYMENT_ID}_state.sh"
+DEPLOYED_CLUSTER_NAME="${DEPLOYED_CLUSTER_NAME}"
+EOF
   echo "GKE Cluster name: $DEPLOYED_CLUSTER_NAME"
 fi
 
