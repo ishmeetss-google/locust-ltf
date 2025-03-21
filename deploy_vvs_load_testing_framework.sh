@@ -12,9 +12,12 @@ fi
 # Load configuration
 source "$CONFIG_FILE"
 
+
+
 # Generate dynamic variables
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
-DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/locust-docker-repo-${DEPLOYMENT_ID}/locust-load-test:LTF-${TIMESTAMP}"
+CLEAN_REPO_NAME="locust-docker-repo-$(echo ${DEPLOYMENT_ID} | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/^[^a-z]*/l/' | sed 's/-$/1/')"
+DOCKER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${CLEAN_REPO_NAME}/locust-load-test:LTF-${TIMESTAMP}"
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 
 # Set test type and endpoint access based on ENDPOINT_ACCESS_TYPE
@@ -180,9 +183,10 @@ gcloud services enable aiplatform.googleapis.com \
 
 # Create Artifact Registry repository
 echo "Creating Artifact Registry repository..."
-if ! gcloud artifacts repositories describe locust-docker-repo-${DEPLOYMENT_ID} --location="${REGION}" --project="${PROJECT_ID}" &>/dev/null; then
-  echo "Creating Artifact Registry repository..."
-  gcloud artifacts repositories create locust-docker-repo-${DEPLOYMENT_ID} --repository-format=docker --location="${REGION}" --project="${PROJECT_ID}"
+if ! gcloud artifacts repositories describe ${CLEAN_REPO_NAME} --location="${REGION}" --project="${PROJECT_ID}" &>/dev/null; then
+  # When creating the Artifact Registry repository
+  echo "Creating Artifact Registry repository with name: ${CLEAN_REPO_NAME}"
+  gcloud artifacts repositories create ${CLEAN_REPO_NAME} --repository-format=docker --location="${REGION}" --project="${PROJECT_ID}"
 else
   echo "Artifact Registry repository already exists."
 fi
