@@ -74,8 +74,8 @@ if [[ "${ENDPOINT_ACCESS_TYPE}" == "vpc_peering" ]]; then
   terraform state rm 'module.gke_autopilot.kubernetes_horizontal_pod_autoscaler.locust_worker_autoscaler' || true
 fi
 
-  # Standard destroy for non-VPC-peering scenarios
-  terraform destroy --auto-approve
+#Standard destroy
+terraform destroy --auto-approve
 
 # Delete the workspace
 terraform workspace select default
