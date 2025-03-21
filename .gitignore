@@ -1,6 +1,9 @@
 # .gitignore for Terraform
 config.sh
 
+# Deployment script state file
+*_state.sh
+
 # Temporary files
 config/locust_config.env
 
