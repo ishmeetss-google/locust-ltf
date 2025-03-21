@@ -77,7 +77,7 @@ resource "google_container_cluster" "ltf_autopilot_cluster" {
   # Network configuration based on user input or defaults
   network    = local.using_custom_network ? local.network_name : null
   subnetwork = var.subnetwork != "" ? var.subnetwork : null
-  
+
   # Private cluster configuration for PSC support
   dynamic "private_cluster_config" {
     for_each = var.use_private_endpoint || var.enable_private_networking ? [1] : []
@@ -102,13 +102,13 @@ resource "google_container_cluster" "ltf_autopilot_cluster" {
     }
   }
 
-dynamic "ip_allocation_policy" {
-  for_each = var.enable_private_networking ? [1] : []
-  content {
-    # Remove references to pod-range and services-range
-    # Just use GKE's default auto-creation
+  dynamic "ip_allocation_policy" {
+    for_each = var.enable_private_networking ? [1] : []
+    content {
+      # Remove references to pod-range and services-range
+      # Just use GKE's default auto-creation
+    }
   }
-}
 
   # Enable Workload Identity Federation
   workload_identity_config {

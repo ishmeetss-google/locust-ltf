@@ -45,7 +45,7 @@ output "psc_address_ip" {
 output "match_grpc_address" {
   description = "The private gRPC address for sending match requests"
   value = try(
-    local.is_psc_enabled || var.enable_vpc_peering  ? google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.private_endpoints[0].match_grpc_address : null,
+    local.is_psc_enabled || var.enable_vpc_peering ? google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.private_endpoints[0].match_grpc_address : null,
     null
   )
 }
@@ -66,8 +66,4 @@ output "endpoint_access_info" {
     is_psc_enabled = local.is_psc_enabled
     network        = var.endpoint_network
   }
-}
-
-output "test" {
-  value = google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.private_endpoints
 }
