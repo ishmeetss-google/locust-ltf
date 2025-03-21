@@ -21,7 +21,6 @@ else
   echo "State file $STATE_FILE not found. Using values from config.sh instead."
   
   # Determine endpoint access type from CONFIG_FILE
-  # If ENDPOINT_ACCESS_TYPE is not set, try to infer it
   if [ -z "$ENDPOINT_ACCESS_TYPE" ]; then
     if [ -n "$VPC_NETWORK_NAME" ] && [ -n "$PEERING_RANGE_NAME" ]; then
       echo "Inferring VPC peering mode from configuration"
@@ -46,12 +45,6 @@ fi
 echo "Destroying Terraform resources..."
 cd terraform
 
-# Remove any existing provider override file
-if [ -f "kubernetes_provider_override.tf" ]; then
-  echo "Removing existing provider override file..."
-  rm -f kubernetes_provider_override.tf
-fi
-
 # Select the workspace
 if terraform workspace list | grep -q "$WORKSPACE_NAME"; then
     terraform workspace select "$WORKSPACE_NAME"
@@ -70,36 +63,19 @@ fi
 
 # VPC Peering specific handling for Kubernetes connectivity
 if [[ "${ENDPOINT_ACCESS_TYPE}" == "vpc_peering" ]]; then
-  echo "VPC peering detected, setting up kubectl proxy for Terraform Kubernetes provider..."
-  
-  # Create a temporary provider override file
-cat <<EOF > kubernetes_provider_override.tf
-provider "kubernetes" {
-  host = "http://localhost:8001"
-  insecure = true
-}
-EOF
 
-  # Start kubectl proxy in the background
-  kubectl proxy &
-  PROXY_PID=$!
-  
-  # Give the proxy a moment to start
-  echo "Waiting for kubectl proxy to start..."
-  sleep 5
-  
-  # Destroy Terraform resources
-  echo "Destroying Terraform resources via kubectl proxy..."
-  terraform destroy --auto-approve
-  
-  # Clean up proxy
-  echo "Cleaning up kubectl proxy..."
-  kill $PROXY_PID 2>/dev/null || true
-  rm -f kubernetes_provider_override.tf
-else
+  terraform state rm 'module.gke_autopilot.kubernetes_namespace.locust_namespace'
+  terraform state rm 'module.gke_autopilot.kubernetes_service_account.locust_service_account' || true
+  terraform state rm 'module.gke_autopilot.kubernetes_config_map.locust_config' || true
+  terraform state rm 'module.gke_autopilot.kubernetes_deployment.locust_master' || true
+  terraform state rm 'module.gke_autopilot.kubernetes_deployment.locust_worker' || true
+  terraform state rm 'module.gke_autopilot.kubernetes_service.locust_master' || true
+  terraform state rm 'module.gke_autopilot.kubernetes_service.locust_master_web' || true
+  terraform state rm 'module.gke_autopilot.kubernetes_horizontal_pod_autoscaler.locust_worker_autoscaler' || true
+fi
+
   # Standard destroy for non-VPC-peering scenarios
   terraform destroy --auto-approve
-fi
 
 # Delete the workspace
 terraform workspace select default
