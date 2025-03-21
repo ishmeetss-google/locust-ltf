@@ -179,7 +179,7 @@ variable "subnetwork" {
 variable "endpoint_create_timeout" {
   type        = string
   description = "Timeout duration for endpoint creation."
-  default     = "30m"
+  default     = "6h"
 }
 
 variable "endpoint_update_timeout" {
@@ -254,7 +254,7 @@ variable "deployed_index_reserved_ip_ranges" {
 variable "deployed_index_create_timeout" {
   type        = string
   description = "Timeout duration for deployed index creation."
-  default     = "4h"
+  default     = "6h"
 }
 variable "deployed_index_update_timeout" {
   type        = string

@@ -235,7 +235,7 @@ class Config:
         # If ENDPOINT_ACCESS_TYPE is directly specified, use it
         if self.endpoint_access_type:
             # Ensure it's one of the valid options
-            if self.endpoint_access_type not in ["public", "private_vpc", "private_service_connect"]:
+            if self.endpoint_access_type not in ["public", "vpc_peering", "private_service_connect"]:
                 logging.warning(f"Invalid ENDPOINT_ACCESS_TYPE '{self.endpoint_access_type}', defaulting to 'public'")
                 self.endpoint_access_type = "public"
         else:
@@ -255,7 +255,7 @@ class Config:
 config = Config('./locust_config.env')
 
 # Determine if we're using gRPC or HTTP based on endpoint_access_type
-USE_GRPC = config.endpoint_access_type in ["private_service_connect", "private_vpc", "vpc_peering"]
+USE_GRPC = config.endpoint_access_type in ["private_service_connect", "vpc_peering"]
 logging.info(f"Using gRPC mode: {USE_GRPC} based on endpoint_access_type={config.endpoint_access_type}")
 
 @events.init_command_line_parser.add_listener
@@ -292,11 +292,11 @@ def _(parser):
 def on_locust_init(environment, **kwargs):
     """Set up the host and tags based on configuration."""
     # Determine test mode based on endpoint access type
-    is_psc_enabled = config.endpoint_access_type == "private_service_connect"
+    is_grpc_mode = config.endpoint_access_type in ["private_service_connect", "vpc_peering"]
     
     # Set default tags based on endpoint access type if no tags were specified
     if hasattr(environment.parsed_options, 'tags') and not environment.parsed_options.tags:
-        if is_psc_enabled:
+        if is_grpc_mode:
             environment.parsed_options.tags = ['grpc']
             logging.info("Auto-setting tags to 'grpc' based on endpoint access type 'private_service_connect'")
         else:
@@ -305,7 +305,7 @@ def on_locust_init(environment, **kwargs):
     
     # Set host based on endpoint access type if no host was specified
     if not environment.host:
-        if is_psc_enabled:
+        if is_grpc_mode:
             # PSC/gRPC mode
             grpc_address = config.match_grpc_address
             if grpc_address:

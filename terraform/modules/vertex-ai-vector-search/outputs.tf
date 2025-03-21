@@ -28,15 +28,10 @@ output "public_endpoint_domain_name" {
 # -----------------------------------------------------------------------------
 # PSC-related outputs
 # -----------------------------------------------------------------------------
-output "psc_enabled" {
-  description = "Whether PSC is enabled for the endpoint"
-  value       = local.is_psc_enabled
-}
-
 output "service_attachment" {
   description = "The service attachment URI for PSC forwarding rule creation"
   value = try(
-    local.is_psc_enabled ? google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.private_endpoints[0].service_attachment : null,
+    local.is_psc_enabled || var.enable_vpc_peering ? google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.private_endpoints[0].service_attachment : null,
     null
   )
 }
@@ -50,7 +45,7 @@ output "psc_address_ip" {
 output "match_grpc_address" {
   description = "The private gRPC address for sending match requests"
   value = try(
-    local.is_psc_enabled ? google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.private_endpoints[0].match_grpc_address : null,
+    local.is_psc_enabled || var.enable_vpc_peering ? google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.private_endpoints[0].match_grpc_address : null,
     null
   )
 }
@@ -58,7 +53,7 @@ output "match_grpc_address" {
 output "psc_automated_endpoints" {
   description = "PSC automated endpoints information (if PSC automation is used)"
   value = try(
-    local.is_psc_enabled ? google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.private_endpoints[0].psc_automated_endpoints : null,
+    local.is_psc_enabled || var.enable_vpc_peering ? google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.private_endpoints[0].psc_automated_endpoints : null,
     null
   )
 }

@@ -43,6 +43,17 @@ resource "google_compute_global_address" "vpc_peering_range" {
   prefix_length = var.peering_prefix_length
   network       = var.endpoint_network
   project       = var.project_id
+
+  lifecycle {
+    ignore_changes = [
+      # Ignore changes to network format (project ID vs number)
+      network,
+      # Remove creation_timestamp as it causes a warning
+      # creation_timestamp,  
+      description,
+      ip_version
+    ]
+  }
 }
 
 # Establish the VPC peering connection
@@ -54,4 +65,7 @@ resource "google_service_networking_connection" "vpc_peering_connection" {
 
   # Workaround to allow `terraform destroy`, see https://github.com/hashicorp/terraform-provider-google/issues/18729
   deletion_policy = "ABANDON"
+  depends_on = [
+    google_compute_global_address.vpc_peering_range
+  ]
 }

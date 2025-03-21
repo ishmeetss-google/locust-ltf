@@ -38,13 +38,13 @@ variable "locust_test_type" {
 # Network configuration variables
 variable "network" {
   type        = string
-  description = "The VPC network to host the GKE cluster in (format: projects/{project}/global/networks/{network})"
+  description = "The VPC network to host the GKE cluster in (format: projects/{project_number}/global/networks/{network})"
   default     = ""
 }
 
 variable "subnetwork" {
   type        = string
-  description = "The subnetwork to host the GKE cluster in (format: projects/{project}/regions/{region}/subnetworks/{subnetwork})"
+  description = "The full path to the subnetwork to host the GKE cluster in. Required when enable_private_networking is true."
   default     = ""
 }
 
@@ -60,7 +60,7 @@ variable "master_ipv4_cidr_block" {
   default     = "172.16.0.0/28"
 }
 
-variable "enable_psc_support" {
+variable "enable_private_networking" {
   type        = bool
   description = "Whether to configure the cluster for PSC access to Vector Search"
   default     = false
