@@ -1,10 +1,10 @@
 data "google_client_config" "default" {}
 
 provider "kubernetes" {
+  # host = "http://localhost:8001"
   host                   = "https://${google_container_cluster.ltf_autopilot_cluster.endpoint}"
   token                  = data.google_client_config.default.access_token
   cluster_ca_certificate = base64decode(google_container_cluster.ltf_autopilot_cluster.master_auth[0].cluster_ca_certificate)
-
   ignore_annotations = [
     "^autopilot\\.gke\\.io\\/.*",
     "^cloud\\.google\\.com\\/.*"

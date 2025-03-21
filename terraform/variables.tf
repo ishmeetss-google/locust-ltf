@@ -184,8 +184,8 @@ variable "endpoint_access" {
     type = "public"
   }
   validation {
-    condition     = contains(["public", "private_vpc", "private_service_connect"], var.endpoint_access.type)
-    error_message = "endpoint_access.type must be one of: 'public', 'private_vpc', or 'private_service_connect'."
+    condition     = contains(["public", "vpc_peering", "private_service_connect"], var.endpoint_access.type)
+    error_message = "endpoint_access.type must be one of: 'public', 'vpc_peering', or 'private_service_connect'."
   }
 }
 
@@ -206,8 +206,8 @@ variable "peering_prefix_length" {
 locals {
   # Convert to the old variable formats for use in modules that haven't been updated
   endpoint_network = var.network_configuration.network_name != "" ? (
-    "projects/${var.project_id}/global/networks/${var.network_configuration.network_name}"
-  ) : "projects/${var.project_id}/global/networks/default"
+    "projects/${var.project_number}/global/networks/${var.network_configuration.network_name}"
+  ) : "projects/${var.project_number}/global/networks/default"
 
   endpoint_public_endpoint_enabled        = var.endpoint_access.type == "public"
   endpoint_enable_private_service_connect = var.endpoint_access.type == "private_service_connect"

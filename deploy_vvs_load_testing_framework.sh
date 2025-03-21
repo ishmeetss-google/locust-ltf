@@ -78,7 +78,7 @@ if [[ -n "${SUBNETWORK}" && -n "${VPC_NETWORK_NAME}" ]]; then
   # echo "Looking for subnet: ${SUBNET_NAME}"
   
   # Get network URL format that GCP uses internally 
-  NETWORK_URL="projects/${PROJECT_ID}/global/networks/${VPC_NETWORK_NAME}"
+  NETWORK_URL="projects/${PROJECT_NUMBER}/global/networks/${VPC_NETWORK_NAME}"
   # echo "Looking for network: ${NETWORK_URL}"
   
   # List specific subnet with details for debugging
@@ -213,6 +213,9 @@ fi
 current_workspace=$(terraform workspace show)
 echo "Current Terraform workspace: $current_workspace"
 
+# Add debug logging just for this section
+# export TF_LOG=DEBUG
+
 # Create or update terraform.tfvars with appropriate settings
 cat <<EOF > terraform.tfvars
 project_id     = "${PROJECT_ID}"
@@ -338,36 +341,51 @@ NUM_EMBEDDINGS_PER_REQUEST=50
 EOF
 fi
 
-# Extract PSC-specific values if PSC is enabled
-if [[ "${ENDPOINT_ACCESS_TYPE}" == "private_service_connect" ]]; then
-  echo "Extracting PSC configuration..."
+# Extract network-specific values for either PSC or VPC Peering
+if [[ "${ENDPOINT_ACCESS_TYPE}" == "private_service_connect" || "${ENDPOINT_ACCESS_TYPE}" == "vpc_peering" ]]; then
+  echo "Extracting private networking configuration..."
   cd terraform
-  export VS_PSC_ENABLED=true
+  
+  # Set appropriate flags based on access type
+  if [[ "${ENDPOINT_ACCESS_TYPE}" == "private_service_connect" ]]; then
+    export VS_PSC_ENABLED=true
+    export VS_VPC_PEERING_ENABLED=false
+    echo "PSC_ENABLED=true" >> ../config/locust_config.env
+    echo "VPC_PEERING_ENABLED=false" >> ../config/locust_config.env
+  else
+    export VS_PSC_ENABLED=false
+    export VS_VPC_PEERING_ENABLED=true
+    echo "PSC_ENABLED=false" >> ../config/locust_config.env
+    echo "VPC_PEERING_ENABLED=true" >> ../config/locust_config.env
+  fi
   
   # Initialize variables
   VS_SERVICE_ATTACHMENT=""
   VS_PSC_IP=""
   VS_PSC_IP_WITH_PORT=""
   VS_MATCH_GRPC_ADDRESS=""
+
   
-  # Get service attachment
+  # Get service attachment (relevant for PSC)
   if terraform output -raw vector_search_service_attachment &>/dev/null; then
     VS_SERVICE_ATTACHMENT=$(terraform output -raw vector_search_service_attachment)
     echo "Service Attachment: ${VS_SERVICE_ATTACHMENT}"
+    echo "SERVICE_ATTACHMENT=${VS_SERVICE_ATTACHMENT}" >> ../config/locust_config.env
   else
-    echo "Warning: service_attachment not found in terraform output"
+    echo "Note: service_attachment not found in terraform output (expected for VPC Peering)"
   fi
   
-  # Get PSC IP address
+  # Get PSC IP address (relevant for PSC)
   if terraform output -raw psc_address_ip &>/dev/null; then
     VS_PSC_IP=$(terraform output -raw psc_address_ip)
     VS_PSC_IP_WITH_PORT="${VS_PSC_IP}:10000"
     echo "PSC IP Address: ${VS_PSC_IP}"
+    echo "PSC_IP_ADDRESS=${VS_PSC_IP_WITH_PORT}" >> ../config/locust_config.env
   else
-    echo "Warning: psc_address_ip not found in terraform output"
+    echo "Note: psc_address_ip not found in terraform output (expected for VPC Peering)"
   fi
   
-  # Get match_grpc_address
+  # Get match_grpc_address (relevant for both PSC and VPC Peering)
   if terraform output -raw vector_search_match_grpc_address &>/dev/null; then
     match_raw=$(terraform output -raw vector_search_match_grpc_address)
     # Add port if not already present
@@ -377,28 +395,31 @@ if [[ "${ENDPOINT_ACCESS_TYPE}" == "private_service_connect" ]]; then
       VS_MATCH_GRPC_ADDRESS="$match_raw"
     fi
     echo "MATCH_GRPC_ADDRESS from Terraform: ${VS_MATCH_GRPC_ADDRESS}"
+    echo "MATCH_GRPC_ADDRESS=${VS_MATCH_GRPC_ADDRESS}" >> ../config/locust_config.env
   else
-    echo "Note: vector_search_match_grpc_address not available from Terraform"
+    echo "Warning: vector_search_match_grpc_address not available from Terraform"
+    echo "This is needed for both PSC and VPC Peering configurations"
+  fi
+  
+  # Get VPC peering specific outputs if needed
+  if [[ "${ENDPOINT_ACCESS_TYPE}" == "vpc_peering" ]]; then
+    # Try to get any VPC Peering specific outputs
+    if terraform output -raw vector_search_private_endpoints_connection &>/dev/null; then
+      VS_PRIVATE_ENDPOINT=$(terraform output -raw vector_search_private_endpoints_connection)
+      echo "VPC Peering Connection: ${VS_PRIVATE_ENDPOINT}"
+      echo "PRIVATE_ENDPOINT=${VS_PRIVATE_ENDPOINT}" >> ../config/locust_config.env
+    else
+      echo "Note: No specific VPC peering endpoint information found"
+    fi
+    
+    # You might need other VPC peering specific outputs here
   fi
   
   cd ..
-  
-  # Add PSC configuration to locust_config.env
-  echo "PSC_ENABLED=true" >> config/locust_config.env
-  
-  if [[ -n "${VS_SERVICE_ATTACHMENT}" ]]; then
-    echo "SERVICE_ATTACHMENT=${VS_SERVICE_ATTACHMENT}" >> config/locust_config.env
-  fi
-  
-  if [[ -n "${VS_MATCH_GRPC_ADDRESS}" ]]; then
-    echo "MATCH_GRPC_ADDRESS=${VS_MATCH_GRPC_ADDRESS}" >> config/locust_config.env
-  fi
-  
-  if [[ -n "${VS_PSC_IP_WITH_PORT}" ]]; then
-    echo "PSC_IP_ADDRESS=${VS_PSC_IP_WITH_PORT}" >> config/locust_config.env
-  fi
 else
+  echo "Using public endpoint configuration"
   echo "PSC_ENABLED=false" >> config/locust_config.env
+  echo "VPC_PEERING_ENABLED=false" >> config/locust_config.env
 fi
 
 # Display the contents of locust_config.env for verification

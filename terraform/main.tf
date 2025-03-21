@@ -82,13 +82,13 @@ module "gke_autopilot" {
   locust_test_type = var.locust_test_type
 
   # Use simplified network configuration from locals
-  network                  = local.endpoint_network
-  subnetwork               = local.subnetwork
-  enable_psc_support       = local.endpoint_enable_private_service_connect
-  use_private_endpoint     = false
-  master_ipv4_cidr_block   = local.master_ipv4_cidr_block
-  gke_pod_subnet_range     = local.gke_pod_subnet_range
-  gke_service_subnet_range = local.gke_service_subnet_range
+  network                   = local.endpoint_network
+  subnetwork                = local.subnetwork
+  enable_private_networking = local.endpoint_enable_private_service_connect || local.enable_vpc_peering
+  use_private_endpoint      = false
+  master_ipv4_cidr_block    = local.master_ipv4_cidr_block
+  gke_pod_subnet_range      = local.gke_pod_subnet_range
+  gke_service_subnet_range  = local.gke_service_subnet_range
 }
 
 resource "google_compute_instance" "nginx_proxy" {
@@ -105,15 +105,15 @@ resource "google_compute_instance" "nginx_proxy" {
 
   network_interface {
     # Use the consolidated network configuration
-    network = local.endpoint_enable_private_service_connect ? (
-      var.network_configuration.network_name
+    network = local.endpoint_enable_private_service_connect || local.enable_vpc_peering ? (
+      local.endpoint_network
     ) : "default"
 
     subnetwork = local.subnetwork != "" ? local.subnetwork : null
 
     # Only add public IP if not using private endpoints
     dynamic "access_config" {
-      for_each = local.endpoint_enable_private_service_connect ? [] : [1]
+      for_each = local.endpoint_enable_private_service_connect || local.enable_vpc_peering ? [] : [1]
       content {
         // Ephemeral public IP
       }
