@@ -149,6 +149,9 @@ EOFNGINX
 EOT
   }
 
+  # Network tag to apply firewall rule to allow SSH
+  tags = ["${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-ltf-reverse-proxy-ssh"]
+
   service_account {
     scopes = ["cloud-platform"]
   }
@@ -157,4 +160,26 @@ EOT
   allow_stopping_for_update = true
 
   depends_on = [module.gke_autopilot]
+}
+
+resource "google_compute_firewall" "allow_ssh_ingress" {
+  count   = var.endpoint_access.type != "public" ? 1 : 0
+  name    = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-allow-ssh-to-reverse-proxy"
+  network = local.endpoint_enable_private_service_connect ? (
+      var.network_configuration.network_name
+    ) : "default"
+  project = var.project_id
+
+  description = "Allow SSH"
+  direction   = "INGRESS"
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22"]
+  }
+
+  # Any IPv4 address
+  source_ranges = ["0.0.0.0/0"]
+
+  target_tags = ["${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-ltf-reverse-proxy-ssh"]
 }
