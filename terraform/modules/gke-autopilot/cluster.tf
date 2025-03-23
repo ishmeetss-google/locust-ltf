@@ -67,28 +67,6 @@ resource "google_project_iam_binding" "container_default_node_service_account_bi
   ]
 }
 
-# If using custom networking, ensure secondary ranges are set up
-resource "google_compute_subnetwork" "gke_subnetwork" {
-  count         = var.enable_psc_support && var.subnetwork == "" && local.using_custom_network ? 1 : 0
-  name          = "gke-psc-subnet"
-  ip_cidr_range = "10.2.0.0/16"
-  region        = var.region
-  network       = local.network_name
-  project       = var.project_id
-
-  secondary_ip_range {
-    range_name    = "pod-range"
-    ip_cidr_range = var.gke_pod_subnet_range
-  }
-
-  secondary_ip_range {
-    range_name    = "services-range"
-    ip_cidr_range = var.gke_service_subnet_range
-  }
-
-  private_ip_google_access = true
-}
-
 resource "google_container_cluster" "ltf_autopilot_cluster" {
   name                = "${local.resource_prefix}-ltf-autopilot-cluster"
   project             = var.project_id
@@ -97,15 +75,12 @@ resource "google_container_cluster" "ltf_autopilot_cluster" {
   deletion_protection = false
 
   # Network configuration based on user input or defaults
-  network = local.using_custom_network ? local.network_name : null
-  subnetwork = var.subnetwork != "" ? var.subnetwork : (
-    var.enable_psc_support && local.using_custom_network ?
-    google_compute_subnetwork.gke_subnetwork[0].self_link : null
-  )
+  network    = local.using_custom_network ? local.network_name : null
+  subnetwork = var.subnetwork != "" ? var.subnetwork : null
 
   # Private cluster configuration for PSC support
   dynamic "private_cluster_config" {
-    for_each = var.use_private_endpoint || var.enable_psc_support ? [1] : []
+    for_each = var.use_private_endpoint || var.enable_private_networking ? [1] : []
     content {
       enable_private_nodes    = true
       enable_private_endpoint = var.use_private_endpoint
@@ -127,12 +102,11 @@ resource "google_container_cluster" "ltf_autopilot_cluster" {
     }
   }
 
-  # IP allocation policy for GKE with PSC
   dynamic "ip_allocation_policy" {
-    for_each = var.enable_psc_support ? [1] : []
+    for_each = var.enable_private_networking ? [1] : []
     content {
-      cluster_secondary_range_name  = var.subnetwork != "" ? null : "pod-range"
-      services_secondary_range_name = var.subnetwork != "" ? null : "services-range"
+      # Remove references to pod-range and services-range
+      # Just use GKE's default auto-creation
     }
   }
 
@@ -154,6 +128,7 @@ resource "google_container_cluster" "ltf_autopilot_cluster" {
   lifecycle {
     ignore_changes = [
       node_config,
+      subnetwork,
     ]
   }
 }
@@ -161,7 +136,7 @@ resource "google_container_cluster" "ltf_autopilot_cluster" {
 # Create a firewall rule to allow inbound traffic to Vector Search endpoints 
 # (using IP-based approach instead of tags)
 resource "google_compute_firewall" "allow_psc_ingress" {
-  count   = var.enable_psc_support && local.using_custom_network ? 1 : 0
+  count   = var.enable_private_networking && local.using_custom_network ? 1 : 0
   name    = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-allow-psc-for-vector-search"
   network = local.network_name
   project = var.project_id
@@ -185,7 +160,7 @@ resource "google_compute_firewall" "allow_psc_ingress" {
 
 # Create a firewall rule to allow communication between GKE and Vector Search
 resource "google_compute_firewall" "allow_internal_communication" {
-  count   = var.enable_psc_support && local.using_custom_network ? 1 : 0
+  count   = var.enable_private_networking && local.using_custom_network ? 1 : 0
   name    = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-allow-internal-network-communication"
   network = local.network_name
   project = var.project_id

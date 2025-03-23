@@ -28,11 +28,6 @@ output "vector_search_public_endpoint" {
 # -----------------------------------------------------------------------------
 # PSC Connectivity Outputs
 # -----------------------------------------------------------------------------
-output "vector_search_psc_enabled" {
-  description = "Whether PSC is enabled for the Vector Search endpoint"
-  value       = module.vector_search.psc_enabled
-}
-
 output "vector_search_service_attachment" {
   description = "The service attachment URI for PSC forwarding rule creation"
   value       = module.vector_search.service_attachment
