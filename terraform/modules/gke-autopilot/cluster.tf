@@ -129,6 +129,7 @@ resource "google_container_cluster" "ltf_autopilot_cluster" {
     ignore_changes = [
       node_config,
       subnetwork,
+      network,
     ]
   }
 }
