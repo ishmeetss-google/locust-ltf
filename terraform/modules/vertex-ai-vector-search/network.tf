@@ -21,13 +21,22 @@ resource "google_compute_address" "psc_address" {
   description  = "PSC address for Vector Search endpoint"
 }
 
+locals {
+  # Extract and normalize network format to avoid unnecessary replacements
+  normalized_network = var.endpoint_network != null ? (
+    startswith(var.endpoint_network, "https://") ? 
+      "projects/${split("/", var.endpoint_network)[4]}/global/networks/${split("/", var.endpoint_network)[8]}" :
+      var.endpoint_network
+  ) : null
+}
+
 # Create forwarding rule only when using Private Service Connect
 resource "google_compute_forwarding_rule" "psc_forwarding_rule" {
   count                 = var.enable_private_service_connect ? 1 : 0
   name                  = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-ltf-psc-forwarding-rule"
   region                = var.region
   project               = var.project_id
-  network               = var.endpoint_network
+  network               = local.normalized_network
   ip_address            = google_compute_address.psc_address[0].self_link
   target                = google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.private_endpoints[0].service_attachment
   load_balancing_scheme = ""
