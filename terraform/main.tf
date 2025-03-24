@@ -92,7 +92,7 @@ module "gke_autopilot" {
 }
 
 resource "google_compute_instance" "nginx_proxy" {
-  name         = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-ltf-nginx-proxy"
+  name         = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-ltf-nginx-proxy-${lower(replace(var.endpoint_access.type, "/[^a-z0-9\\-]+/", ""))}"  # Add endpoint type to name
   machine_type = "e2-micro"
   zone         = "${var.region}-a"
   project      = var.project_id

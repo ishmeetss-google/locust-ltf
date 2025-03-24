@@ -12,6 +12,16 @@ source "$CONFIG_FILE"
 # Determine the workspace name
 WORKSPACE_NAME="$DEPLOYMENT_ID"
 
+# Format resource prefix the same way Terraform does
+format_resource_prefix() {
+  local deployment_id="$1"
+  # Convert to lowercase and replace non-alphanumeric/hyphen chars with empty string
+  echo "$deployment_id" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9\-]//g'
+}
+
+RESOURCE_PREFIX=$(format_resource_prefix "$DEPLOYMENT_ID")
+echo "Using resource prefix: $RESOURCE_PREFIX"
+
 # Try to load state, but fall back to config if state file not found
 STATE_FILE="${DEPLOYMENT_ID}_state.sh"
 if [ -f "$STATE_FILE" ]; then
@@ -34,9 +44,9 @@ else
     fi
   fi
   
-  # Set deployed cluster name if not available
+  # Set deployed cluster name if not available - use the same formatting as Terraform
   if [ -z "$DEPLOYED_CLUSTER_NAME" ]; then
-    DEPLOYED_CLUSTER_NAME="${WORKSPACE_NAME}-ltf-autopilot-cluster"
+    DEPLOYED_CLUSTER_NAME="${RESOURCE_PREFIX}-ltf-autopilot-cluster"
     echo "Setting inferred cluster name: $DEPLOYED_CLUSTER_NAME"
   fi
 fi
@@ -61,20 +71,17 @@ else
   echo "Warning: Unable to get GKE cluster name, skipping kubectl configuration"
 fi
 
-# VPC Peering specific handling for Kubernetes connectivity
-if [[ "${ENDPOINT_ACCESS_TYPE}" == "vpc_peering" ]]; then
+# Remove Kubernetes resources from Terraform state to avoid dependency issues
+terraform state rm 'module.gke_autopilot.kubernetes_namespace.locust_namespace' || true
+terraform state rm 'module.gke_autopilot.kubernetes_service_account.locust_service_account' || true
+terraform state rm 'module.gke_autopilot.kubernetes_config_map.locust_config' || true
+terraform state rm 'module.gke_autopilot.kubernetes_deployment.locust_master' || true
+terraform state rm 'module.gke_autopilot.kubernetes_deployment.locust_worker' || true
+terraform state rm 'module.gke_autopilot.kubernetes_service.locust_master' || true
+terraform state rm 'module.gke_autopilot.kubernetes_service.locust_master_web' || true
+terraform state rm 'module.gke_autopilot.kubernetes_horizontal_pod_autoscaler.locust_worker_autoscaler' || true
 
-  terraform state rm 'module.gke_autopilot.kubernetes_namespace.locust_namespace'
-  terraform state rm 'module.gke_autopilot.kubernetes_service_account.locust_service_account' || true
-  terraform state rm 'module.gke_autopilot.kubernetes_config_map.locust_config' || true
-  terraform state rm 'module.gke_autopilot.kubernetes_deployment.locust_master' || true
-  terraform state rm 'module.gke_autopilot.kubernetes_deployment.locust_worker' || true
-  terraform state rm 'module.gke_autopilot.kubernetes_service.locust_master' || true
-  terraform state rm 'module.gke_autopilot.kubernetes_service.locust_master_web' || true
-  terraform state rm 'module.gke_autopilot.kubernetes_horizontal_pod_autoscaler.locust_worker_autoscaler' || true
-fi
-
-#Standard destroy
+# Standard destroy
 terraform destroy --auto-approve
 
 # Delete the workspace
@@ -91,9 +98,11 @@ if [ -f "$STATE_FILE" ]; then
 fi
 
 # Artifact Registry Cleanup
-if [[ -n "${DOCKER_IMAGE}" ]]; then
-  echo "Cleaning up Artifact Registry repository..."
-  gcloud artifacts repositories delete locust-docker-repo --location="$REGION" --project="$PROJECT_ID" --quiet --async || echo "Failed to delete Artifact Registry repository, it may not exist"
+# Format repository name the same way as in the deployment script
+CLEAN_REPO_NAME="locust-docker-repo-$(echo ${DEPLOYMENT_ID} | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/^[^a-z]*/l/' | sed 's/-$/1/')"
+if [[ -n "${CLEAN_REPO_NAME}" ]]; then
+  echo "Cleaning up Artifact Registry repository: ${CLEAN_REPO_NAME}..."
+  gcloud artifacts repositories delete ${CLEAN_REPO_NAME} --location="$REGION" --project="$PROJECT_ID" --quiet --async || echo "Failed to delete Artifact Registry repository, it may not exist"
 fi
 
 echo "Cleanup complete."

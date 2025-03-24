@@ -113,7 +113,12 @@ resource "google_vertex_ai_index_endpoint" "vector_index_endpoint" {
 
 resource "random_id" "suffix" {
   byte_length = 4
+  keepers = {
+    # When the endpoint type change, automatically the random_id will switch
+    endpoint_type = var.endpoint_public_endpoint_enabled ? "public" : (var.enable_private_service_connect ? "psc" : "vpc")
+  }
 }
+
 resource "google_vertex_ai_index_endpoint_deployed_index" "deployed_vector_index" {
   depends_on     = [google_vertex_ai_index_endpoint.vector_index_endpoint]
   index_endpoint = google_vertex_ai_index_endpoint.vector_index_endpoint.id

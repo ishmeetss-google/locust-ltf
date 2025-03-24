@@ -21,13 +21,31 @@ resource "google_compute_address" "psc_address" {
   description  = "PSC address for Vector Search endpoint"
 }
 
+locals {
+  # Extract the network name regardless of input format
+  network_name = var.endpoint_network != null ? (
+    # If it's in full URL format
+    startswith(var.endpoint_network, "https://") ? 
+      regex(".*/networks/([^/]+)$", var.endpoint_network)[0] :
+    # If it's in projects/xxx/global/networks/yyy format
+    startswith(var.endpoint_network, "projects/") ?
+      regex(".*/networks/([^/]+)$", var.endpoint_network)[0] :
+    # Otherwise assume it's just the network name
+    var.endpoint_network
+  ) : ""
+  
+  # Normalize to the full URL format Google API returns
+  normalized_network = var.endpoint_network != null ? (
+    "https://www.googleapis.com/compute/v1/projects/${var.project_id}/global/networks/${local.network_name}"
+  ) : null
+}
 # Create forwarding rule only when using Private Service Connect
 resource "google_compute_forwarding_rule" "psc_forwarding_rule" {
   count                 = var.enable_private_service_connect ? 1 : 0
   name                  = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-ltf-psc-forwarding-rule"
   region                = var.region
   project               = var.project_id
-  network               = var.endpoint_network
+  network               = local.normalized_network
   ip_address            = google_compute_address.psc_address[0].self_link
   target                = google_vertex_ai_index_endpoint_deployed_index.deployed_vector_index.private_endpoints[0].service_attachment
   load_balancing_scheme = ""
