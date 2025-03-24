@@ -22,14 +22,23 @@ resource "google_compute_address" "psc_address" {
 }
 
 locals {
-  # Extract and normalize network format to avoid unnecessary replacements
-  normalized_network = var.endpoint_network != null ? (
+  # Extract the network name regardless of input format
+  network_name = var.endpoint_network != null ? (
+    # If it's in full URL format
     startswith(var.endpoint_network, "https://") ? 
-      "projects/${split("/", var.endpoint_network)[4]}/global/networks/${split("/", var.endpoint_network)[8]}" :
-      var.endpoint_network
+      regex(".*/networks/([^/]+)$", var.endpoint_network)[0] :
+    # If it's in projects/xxx/global/networks/yyy format
+    startswith(var.endpoint_network, "projects/") ?
+      regex(".*/networks/([^/]+)$", var.endpoint_network)[0] :
+    # Otherwise assume it's just the network name
+    var.endpoint_network
+  ) : ""
+  
+  # Normalize to the full URL format Google API returns
+  normalized_network = var.endpoint_network != null ? (
+    "https://www.googleapis.com/compute/v1/projects/${var.project_id}/global/networks/${local.network_name}"
   ) : null
 }
-
 # Create forwarding rule only when using Private Service Connect
 resource "google_compute_forwarding_rule" "psc_forwarding_rule" {
   count                 = var.enable_private_service_connect ? 1 : 0
