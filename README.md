@@ -294,14 +294,22 @@ In the Locust UI:
 
 - **QPS per User**:The QPS each user should target.  Locust will try to maintain this rate, but if latency is high, actual QPS may be lower.
 
-### 3. Monitoring During Tests
+### 3. ### Key Performance Metrics to Report
 
-Watch these metrics during your test:
+Collect these key metrics for each test:
 
-- **RPS (Requests Per Second)**: Overall throughput
-- **Response Time**: Median and 95th percentile latency
-- **Failure Rate**: Should ideally remain at 0%
-- **CPU/Memory Usage**: Via GCP console 
+* **Test Run Timestamp (UTC)** - Time when the test was started
+* **Total Failures** - Found in the Statistics tab of Locust UI
+* **Availability %** - Calculated as: 100 - "Availability % ((Total Requests - Total Failures) / Total Requests)*100"
+* **p99 Client Latency (ms)** - 99th percentile response time measured by client
+  1. In Locust UI, click "Download Data" → "Download requests CSV"
+  2. Calculate the 50th, 95th, 99th, 99.9th percentile from the response time column
+* **p99 Server Latency (ms)** - 99th percentile response time measured at server
+  1. Go to Vector Search UI → Deployed Index → Monitoring tab
+  2. Find the time window where requests were sent
+  3. Adjust to display the 99th percentile
+  4. Open "Latency" in Metrics Explorer
+  9. Run query and record the scalar p99 values
 
 ### 4. Analyzing Results
 
