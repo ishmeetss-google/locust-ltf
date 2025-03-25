@@ -294,7 +294,7 @@ In the Locust UI:
 
 - **QPS per User**:The QPS each user should target.  Locust will try to maintain this rate, but if latency is high, actual QPS may be lower.
 
-### 3. ### Key Performance Metrics to Report
+### 3. Key Performance Metrics to Report
 
 Collect these key metrics for each test:
 
