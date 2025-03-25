@@ -64,9 +64,9 @@ function load_configuration() {
 }
 
 #------------------------------------------------------------------------------
-# Check DEPLOYMENT_ID
+# Verify DEPLOYMENT_ID
 #------------------------------------------------------------------------------
-function verify_deployment_id_length() {
+function verify_deployment_id() {
   if [[ ${#DEPLOYMENT_ID} -gt 15 ]]; then
     echo "❌ ERROR: Deployment_ID length must be shorter than or equal to 15 characters."
     exit 1
