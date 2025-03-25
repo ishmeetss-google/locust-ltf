@@ -100,3 +100,8 @@ output "locust_namespace" {
   description = "The Kubernetes namespace where Locust resources are deployed"
   value       = module.gke_autopilot.locust_namespace
 }
+
+output "locust_external_ip" {
+  description = "The external IP address for accessing the Locust UI (if enabled)"
+  value       = var.create_external_ip ? module.gke_autopilot.locust_master_web_ip : null
+}

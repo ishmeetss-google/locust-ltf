@@ -35,6 +35,12 @@ variable "locust_test_type" {
   }
 }
 
+variable "create_external_ip" {
+  type        = bool
+  description = "Whether to create an external IP address for the Locust UI"
+  default     = false
+}
+
 # Network configuration variables
 variable "network" {
   type        = string

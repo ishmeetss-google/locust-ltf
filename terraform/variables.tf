@@ -426,3 +426,9 @@ variable "locust_test_type" {
     error_message = "The locust_test_type must be either 'http' or 'grpc'."
   }
 }
+
+variable "create_external_ip" {
+  type        = bool
+  description = "Whether to create an external IP address for the Locust UI"
+  default     = false
+}

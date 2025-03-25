@@ -228,7 +228,7 @@ resource "kubernetes_service" "locust_master_web" {
   metadata {
     name      = "${local.resource_prefix}-master-web"
     namespace = kubernetes_namespace.locust_namespace.metadata[0].name
-    annotations = {
+    annotations = var.create_external_ip ? {} : {
       "networking.gke.io/load-balancer-type" = "Internal"
     }
     labels = {

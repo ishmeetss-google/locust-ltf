@@ -80,6 +80,8 @@ module "gke_autopilot" {
   deployment_id    = var.deployment_id
   image            = var.image
   locust_test_type = var.locust_test_type
+  create_external_ip = var.create_external_ip
+
 
   # Use simplified network configuration from locals
   network                   = local.endpoint_network
