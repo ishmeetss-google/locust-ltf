@@ -14,6 +14,7 @@ set -e  # Exit on any error
 function main() {
   # Phase 1: Setup and Configuration
   load_configuration
+  verify_deployment_id_length
   setup_dynamic_variables
   configure_endpoint_access
   configure_network_settings
@@ -60,6 +61,16 @@ function load_configuration() {
 
   echo "✅ Found configuration file. Loading settings..."
   source "$config_file"
+}
+
+#------------------------------------------------------------------------------
+# Check DEPLOYMENT_ID length
+#------------------------------------------------------------------------------
+function verify_deployment_id_length() {
+  if [[ ${#DEPLOYMENT_ID} -gt 15 ]]; then
+    echo "❌ ERROR: Deployment ID length must be shorter than or equal to 15 characters."
+    exit 1
+  fi
 }
 
 #------------------------------------------------------------------------------
