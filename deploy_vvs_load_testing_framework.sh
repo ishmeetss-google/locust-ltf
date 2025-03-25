@@ -14,7 +14,7 @@ set -e  # Exit on any error
 function main() {
   # Phase 1: Setup and Configuration
   load_configuration
-  verify_deployment_id_length
+  verify_deployment_id
   setup_dynamic_variables
   configure_endpoint_access
   configure_network_settings
@@ -64,11 +64,16 @@ function load_configuration() {
 }
 
 #------------------------------------------------------------------------------
-# Check DEPLOYMENT_ID length
+# Check DEPLOYMENT_ID
 #------------------------------------------------------------------------------
 function verify_deployment_id_length() {
   if [[ ${#DEPLOYMENT_ID} -gt 15 ]]; then
-    echo "❌ ERROR: Deployment ID length must be shorter than or equal to 15 characters."
+    echo "❌ ERROR: Deployment_ID length must be shorter than or equal to 15 characters."
+    exit 1
+  fi
+  CLEANED_ID=$(echo "$DEPLOYMENT_ID" | tr '[:upper:]' '[:lower:]' | sed -E 's/^[^a-z]+//i; s/[^a-z0-9-]//gi')
+  if [[ "$CLEANED_ID" != "$DEPLOYMENT_ID" ]]; then
+    echo "❌ ERROR: DEPLOYMENT_ID must follow the format instructions provided in the 'config.template.sh' file."
     exit 1
   fi
 }
