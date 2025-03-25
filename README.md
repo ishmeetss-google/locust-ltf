@@ -29,9 +29,12 @@ The framework provides a complete solution for testing Vector Search performance
 - Google Cloud project with billing enabled
 - `gcloud` CLI installed and configured
 - Terraform installed (v6.0.0+)
-- Access to create GKE clusters and Vertex AI resources
-- Permissions to create service accounts and IAM roles
-- Create Artifact Registry repository 
+- Permission to create following resources:
+   - GKE cluster
+   - Vertex AI resources
+   - Service account
+   - IAM roles
+   - Artifact Registry repository
 
 ## Quick Start
 
@@ -44,7 +47,6 @@ For those who want to get started immediately:
 
 2. Edit the minimum required settings:
    ```bash
-   nano config.sh
    
    # Required settings:
    PROJECT_ID="your-project-id"
@@ -202,12 +204,12 @@ For comparing performance across regions, deploy runs/terraform workspaces:
 
 ```bash
 # First deployment
-DEPLOYMENT_ID="us-central1-test"
+DEPLOYMENT_ID="us-central1-tst"
 REGION="us-central1"
 ZONE="us-central1-a"
 
 # Second deployment (once the first deployment is done)
-DEPLOYMENT_ID="us-east1-test"
+DEPLOYMENT_ID="us-east1-tst"
 REGION="us-east1"
 ZONE="us-east1-b"
 ```
@@ -427,43 +429,68 @@ The framework supports testing different Vector Search query configurations:
 - GKE cluster logs: GCP Console > Kubernetes Engine > Clusters > Logs
 - Vector Search metrics: Vertex AI > Vector Search > Endpoints > Monitoring
 
-## Multiple Deployments
-
-You can run multiple load test deployments in the same project to compare different configurations:
-
-1. Using different `DEPLOYMENT_ID` values
-2. Using different `MASTER_IPV4_CIDR_BLOCK` ranges for GKE clusters
-3. Optionally using different `VPC_NETWORK_NAME` values
-
-For example:
-```bash
-# Deployment 1 - OpenAI embeddings
-DEPLOYMENT_ID="openai_test"
-INDEX_DIMENSIONS=1536
-MASTER_IPV4_CIDR_BLOCK="172.16.0.0/28"
-
-# Deployment 2 - Cohere embeddings  
-DEPLOYMENT_ID="cohere_test"
-INDEX_DIMENSIONS=768
-MASTER_IPV4_CIDR_BLOCK="172.16.0.16/28"
-
-# Deployment 3 - Custom configuration
-DEPLOYMENT_ID="custom_test"
-INDEX_DIMENSIONS=384
-MASTER_IPV4_CIDR_BLOCK="172.16.0.32/28"
-```
-
 ## Cleanup
 
-To delete all resources created by this framework:
+To delete all resources created by this framework, run the following command:
 
 ```bash
-cd terraform
-terraform workspace select DEPLOYMENT_ID
-terraform destroy
+./destroy.sh
 ```
 
 Note: This will delete all resources included in the Terraform state, including any Vector Search indexes and endpoints.
+
+## Multiple Deployments
+
+You can run multiple load test deployments in the same project to compare different configurations. To facilitate multiple deployments, each deployment requires its own unique configuration. Follow these steps:
+
+1.  **Create Configuration Files:**
+    * Duplicate the `config.template.sh` file to create a unique configuration file for each deployment.
+    * Use the following command, replacing `<unique-name>` with a descriptive name for your deployment (e.g., `scenario1_config.sh`, `performance_config.sh`):
+
+        ```bash
+        cp config.template.sh <unique-name>.sh
+        ```
+    * Using different `DEPLOYMENT_ID` values for each deployment.
+    * Using different `MASTER_IPV4_CIDR_BLOCK` ranges for GKE clusters for each deployment.
+    * Optionally using different `VPC_NETWORK_NAME` values
+    * Example:
+      ```bash
+      # Deployment 1 - OpenAI embeddings, in openai_config.sh
+      DEPLOYMENT_ID="openai-test"
+      INDEX_DIMENSIONS=1536
+      MASTER_IPV4_CIDR_BLOCK="172.16.0.0/28"
+      ```
+  
+      ```bash
+      # Deployment 2 - Cohere embeddings, in cohere_config.sh
+      DEPLOYMENT_ID="cohere-test"
+      INDEX_DIMENSIONS=768
+      MASTER_IPV4_CIDR_BLOCK="172.16.0.16/28"
+      ```
+  
+      ```bash
+      # Deployment 3 - Custom configuration, in customtest_config.sh
+      DEPLOYMENT_ID="custom-test"
+      INDEX_DIMENSIONS=384
+      MASTER_IPV4_CIDR_BLOCK="172.16.0.32/28"
+      ```
+
+2.  **Modify Scripts:**
+    * Before running the deployement or cleanup script for a configuration, update the `CONFIG_FILE` variable within both the `deploy_vvs_load_testing_framework.sh` and `destroy.sh` scripts to point to the corresponding unique configuration file created in step 1.
+    * Example:
+
+        ```bash
+        # In deploy_vvs_load_testing_framework.sh and destroy.sh
+        CONFIG_FILE="<unique-name>.sh"
+        ```
+    * Finally, run the following command for deploying or to cleanup a particular configuration:
+      ```bash
+        # For deployment of the configuration
+        ./deploy_vvs_load_testing_framework.sh
+
+        # For clean up of the configuration
+        ./destroy.sh
+        ```
 
 ## Additional Resources
 
