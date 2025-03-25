@@ -7,7 +7,7 @@ REGION="us-central1"
 ZONE="us-central1-a"
 INDEX_DIMENSIONS=768
 # DEPLOYMENT_ID: Unique identifier for the resources deployed in this run
-# Format: [a-z][-a-z0-9]* (must start with letter, can contain lowercase alphabets, numbers and hyphen)
+# Format: [a-z][-a-z0-9]* (must start with an alphabet, can contain lowercase alphabets, numbers and hyphen)
 # Deployment ID length must be shorter than or equal to 15 characters.
 DEPLOYMENT_ID="identifier-for-deployed-resources"
 
