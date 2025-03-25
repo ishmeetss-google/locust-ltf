@@ -15,8 +15,8 @@ WORKSPACE_NAME="$DEPLOYMENT_ID"
 # Format resource prefix the same way Terraform does
 format_resource_prefix() {
   local deployment_id="$1"
-  # Convert to lowercase and replace non-alphanumeric/hyphen chars with empty string
-  echo "$deployment_id" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9\-]//g'
+  # Convert to lowercase and replace any character that is not a lowercase letter, digit, or hyphen with empty string
+  echo "$deployment_id" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]//g'
 }
 
 RESOURCE_PREFIX=$(format_resource_prefix "$DEPLOYMENT_ID")
