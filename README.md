@@ -431,7 +431,7 @@ The framework supports testing different Vector Search query configurations:
 
 ## Cleanup
 
-To delete all resources created by this framework, run the following command:
+To delete all resources created by this framework, run the `destroy.sh` script using the following command:
 
 ```bash
 ./destroy.sh
