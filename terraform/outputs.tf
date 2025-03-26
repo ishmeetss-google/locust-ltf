@@ -88,7 +88,7 @@ output "locust_master_node_name" {
 
 output "nginx_proxy_name" {
   description = "The name of the Nginx Proxy"
-  value       = google_compute_instance.nginx_proxy.name
+  value       = var.create_external_ip ? null : google_compute_instance.nginx_proxy[0].name
 }
 
 output "gke_cluster_name" {
@@ -99,4 +99,9 @@ output "gke_cluster_name" {
 output "locust_namespace" {
   description = "The Kubernetes namespace where Locust resources are deployed"
   value       = module.gke_autopilot.locust_namespace
+}
+
+output "locust_external_ip" {
+  description = "The external IP address for accessing the Locust UI (if enabled)"
+  value       = var.create_external_ip ? module.gke_autopilot.locust_master_web_ip : null
 }

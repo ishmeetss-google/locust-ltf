@@ -26,3 +26,4 @@ output "locust_namespace" {
   description = "The Kubernetes namespace where Locust resources are deployed"
   value       = kubernetes_namespace.locust_namespace.metadata[0].name
 }
+

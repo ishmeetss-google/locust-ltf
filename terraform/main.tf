@@ -80,6 +80,8 @@ module "gke_autopilot" {
   deployment_id    = var.deployment_id
   image            = var.image
   locust_test_type = var.locust_test_type
+  create_external_ip = var.create_external_ip
+  min_replicas_worker = var.min_replicas_worker
 
   # Use simplified network configuration from locals
   network                   = local.endpoint_network
@@ -92,6 +94,7 @@ module "gke_autopilot" {
 }
 
 resource "google_compute_instance" "nginx_proxy" {
+  count        = var.create_external_ip ? 0 : 1
   name         = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-ltf-nginx-proxy-${lower(replace(var.endpoint_access.type, "/[^a-z0-9\\-]+/", ""))}"  # Add endpoint type to name
   machine_type = "e2-micro"
   zone         = "${var.region}-a"
@@ -163,7 +166,7 @@ EOT
 }
 
 resource "google_compute_firewall" "allow_ssh_ingress" {
-  count   = var.endpoint_access.type != "public" ? 1 : 0
+  count   = (var.endpoint_access.type != "public" && !var.create_external_ip) ? 1 : 0
   name    = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-allow-ssh-to-reverse-proxy"
   network = local.endpoint_enable_private_service_connect ? (
       var.network_configuration.network_name

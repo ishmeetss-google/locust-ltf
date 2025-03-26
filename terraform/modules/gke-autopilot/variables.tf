@@ -35,6 +35,12 @@ variable "locust_test_type" {
   }
 }
 
+variable "create_external_ip" {
+  type        = bool
+  description = "Whether to create an external IP address for the Locust UI"
+  default     = false
+}
+
 # Network configuration variables
 variable "network" {
   type        = string
@@ -76,4 +82,10 @@ variable "gke_service_subnet_range" {
   type        = string
   description = "IP address range for GKE services in CIDR notation"
   default     = "10.0.32.0/20"
+}
+
+variable "min_replicas_worker" {
+  description = "Minimum number of worker replicas for the Locust worker autoscaler"
+  type        = number
+  default     = 10
 }

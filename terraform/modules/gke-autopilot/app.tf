@@ -228,7 +228,7 @@ resource "kubernetes_service" "locust_master_web" {
   metadata {
     name      = "${local.resource_prefix}-master-web"
     namespace = kubernetes_namespace.locust_namespace.metadata[0].name
-    annotations = {
+    annotations = var.create_external_ip ? {} : {
       "networking.gke.io/load-balancer-type" = "Internal"
     }
     labels = {
@@ -255,7 +255,7 @@ resource "kubernetes_horizontal_pod_autoscaler" "locust_worker_autoscaler" {
   }
 
   spec {
-    min_replicas = 3
+    min_replicas = var.min_replicas_worker
     max_replicas = 1000
 
     scale_target_ref {
