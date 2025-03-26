@@ -856,69 +856,6 @@ EOF
 }
 
 #------------------------------------------------------------------------------
-# Setup access to Locust UI
-#------------------------------------------------------------------------------
-# function setup_locust_ui_access() {
-#   echo "🖥️ Setting up access to the Locust load testing web interface..."
-  
-#   # Exit early if we don't have all required variables
-#   if [[ -z "$DEPLOYED_CLUSTER_SVC" || -z "$DEPLOYED_CLUSTER_MAIN_NODE" || -z "$LOCUST_NAMESPACE" ]]; then
-#     echo "⚠️ Warning: Unable to set up access to Locust UI due to missing information"
-#     return 1
-#   fi
-  
-#   # Setup based on external IP preference
-#   if [[ "${need_external_ip,,}" =~ ^(y|yes)$ ]]; then
-#     echo "  🔄 Configuring public internet access (creating external IP)..."
-#     # Delete existing service if it exists
-#     kubectl -n $LOCUST_NAMESPACE delete svc ${DEPLOYED_CLUSTER_SVC} 
-    
-#     # Create new LoadBalancer service
-#     kubectl -n $LOCUST_NAMESPACE apply -f - <<EOF
-# apiVersion: v1
-# kind: Service
-# metadata:
-#   name: ${DEPLOYED_CLUSTER_SVC}
-# spec:
-#   type: LoadBalancer
-#   ports:
-#   - port: 8089
-#     targetPort: 8089
-#     name: web-ui
-#   selector:
-#     app: ${DEPLOYED_CLUSTER_MAIN_NODE}
-# EOF
-
-#     # Wait for external IP to be assigned
-#     echo "  ⏳ Waiting for external IP address to be assigned..."
-#     while true; do
-#       EXTERNAL_IP=$(kubectl -n $LOCUST_NAMESPACE get svc ${DEPLOYED_CLUSTER_SVC} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
-#       if [ -n "$EXTERNAL_IP" ]; then
-#         break
-#       fi
-#       echo "      Still waiting for IP assignment (this typically takes 1-2 minutes)..."
-#       sleep 5
-#     done
-
-#     # Display service information
-#     kubectl -n $LOCUST_NAMESPACE get svc ${DEPLOYED_CLUSTER_SVC}
-#     echo
-#     echo "  ✅ SUCCESS! Locust UI is available at: http://$EXTERNAL_IP:8089"
-#     echo "     Open the above URL in your browser to access the load testing interface."
-#   else
-#     echo "  ✅ Locust UI access configured for secure tunneling"
-#     echo
-#     echo "     To access the Locust UI, open a new terminal and run this command:"
-#     echo "     ─────────────────────────────────────────────────────────────────"
-#     echo "     gcloud compute ssh ${NGINX_PROXY_NAME} --project ${PROJECT_ID} --zone ${ZONE} -- -NL 8089:localhost:8089"
-#     echo "     ─────────────────────────────────────────────────────────────────"
-#     echo
-#     echo "     Then open http://localhost:8089 in your browser"
-#     echo "     (Keep the terminal window open while using Locust)"
-#   fi
-# }
-
-#------------------------------------------------------------------------------
 # Verify deployment
 #------------------------------------------------------------------------------
 function verify_deployment() {
