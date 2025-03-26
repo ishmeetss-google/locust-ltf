@@ -50,17 +50,17 @@ function main() {
 # Check and load configuration
 #------------------------------------------------------------------------------
 function load_configuration() {
-  local config_file="config.sh"
+  local CONFIG_FILE="config.sh"
   
   echo "📋 Checking for configuration file..."
-  if [ ! -f "$config_file" ]; then
-    echo "❌ Configuration file $config_file not found!"
+  if [ ! -f "$CONFIG_FILE" ]; then
+    echo "❌ Configuration file $CONFIG_FILE not found!"
     echo "   Please copy config.template.sh to config.sh and update with your settings."
     exit 1
   fi
 
   echo "✅ Found configuration file. Loading settings..."
-  source "$config_file"
+  source "$CONFIG_FILE"
 }
 
 #------------------------------------------------------------------------------
