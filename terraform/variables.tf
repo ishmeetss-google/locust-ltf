@@ -416,6 +416,12 @@ variable "deployment_id" {
   description = "Unique identifier for this deployment"
 }
 
+variable "min_replicas_worker" {
+  description = "Minimum number of worker replicas for the Locust worker autoscaler"
+  type        = number
+  default     = 10
+}
+
 variable "locust_test_type" {
   description = "The type of load test to run (http or grpc)"
   type        = string

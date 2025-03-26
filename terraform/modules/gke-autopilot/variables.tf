@@ -83,3 +83,9 @@ variable "gke_service_subnet_range" {
   description = "IP address range for GKE services in CIDR notation"
   default     = "10.0.32.0/20"
 }
+
+variable "min_replicas_worker" {
+  description = "Minimum number of worker replicas for the Locust worker autoscaler"
+  type        = number
+  default     = 10
+}

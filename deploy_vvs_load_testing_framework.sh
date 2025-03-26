@@ -405,6 +405,7 @@ function create_terraform_vars() {
   echo "  master_ipv4_cidr_block = \"${MASTER_IPV4_CIDR_BLOCK:-172.16.0.0/28}\"" >> terraform.tfvars
   echo "  pod_subnet_range = \"${GKE_POD_SUBNET_RANGE:-10.4.0.0/14}\"" >> terraform.tfvars
   echo "  service_subnet_range = \"${GKE_SERVICE_SUBNET_RANGE:-10.0.32.0/20}\"" >> terraform.tfvars
+  [[ -n "$MIN_REPLICAS_WORKER" ]] && echo "min_replicas_worker = $MIN_REPLICAS_WORKER" >> terraform.tfvars
   echo "}" >> terraform.tfvars
 
   # Add VPC peering variables if needed

@@ -81,7 +81,7 @@ module "gke_autopilot" {
   image            = var.image
   locust_test_type = var.locust_test_type
   create_external_ip = var.create_external_ip
-
+  min_replicas_worker = var.min_replicas_worker
 
   # Use simplified network configuration from locals
   network                   = local.endpoint_network
@@ -166,7 +166,7 @@ EOT
 }
 
 resource "google_compute_firewall" "allow_ssh_ingress" {
-  count   = var.endpoint_access.type != "public" ? 1 : 0
+  count   = (var.endpoint_access.type != "public" && !var.create_external_ip) ? 1 : 0
   name    = "${lower(replace(var.deployment_id, "/[^a-z0-9\\-]+/", ""))}-allow-ssh-to-reverse-proxy"
   network = local.endpoint_enable_private_service_connect ? (
       var.network_configuration.network_name

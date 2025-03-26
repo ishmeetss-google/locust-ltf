@@ -88,7 +88,7 @@ output "locust_master_node_name" {
 
 output "nginx_proxy_name" {
   description = "The name of the Nginx Proxy"
-  value       = google_compute_instance.nginx_proxy.name
+  value       = var.create_external_ip ? null : google_compute_instance.nginx_proxy[0].name
 }
 
 output "gke_cluster_name" {

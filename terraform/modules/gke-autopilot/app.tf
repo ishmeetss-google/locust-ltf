@@ -255,7 +255,7 @@ resource "kubernetes_horizontal_pod_autoscaler" "locust_worker_autoscaler" {
   }
 
   spec {
-    min_replicas = 3
+    min_replicas = var.min_replicas_worker
     max_replicas = 1000
 
     scale_target_ref {
