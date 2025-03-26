@@ -76,3 +76,6 @@ DEPLOYED_INDEX_DEDICATED_MACHINE_TYPE="e2-standard-16"  # Machine type for dedic
 # PEERING_RANGE_NAME="vs-peering-range"
 # # Prefix length for the reserved peering range (16=/16 CIDR, 20=/20 CIDR, etc.)
 # PEERING_PREFIX_LENGTH="16"
+
+# Locust worker scaling configuration
+# MIN_REPLICAS_WORKER=10  # Minimum number of Locust worker replicas (default: 10)
