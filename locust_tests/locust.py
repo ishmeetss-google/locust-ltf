@@ -288,6 +288,14 @@ def _(parser):
         help="Advanced: Fraction of leaf nodes to search (0.0-1.0). Higher values increase recall but reduce performance."
     )
 
+        # Advanced parameters
+    parser.add_argument(
+        "--return-full-datapoint",
+        action="store_true",
+        default=config.return_full_datapoint,
+        help="Whether to return full datapoint content with search results. Increases response size but provides complete vector data."
+    )
+
 @events.init.add_listener
 def on_locust_init(environment, **kwargs):
     """Set up the host and tags based on configuration."""
@@ -339,6 +347,7 @@ class BaseVectorSearchUser:
         # Store parsed options needed for requests
         self.num_neighbors = environment.parsed_options.num_neighbors
         self.fraction_leaf_nodes_to_search_override = environment.parsed_options.fraction_leaf_nodes_to_search_override
+        self.return_full_datapoints = environment.parsed_options.return_full_datapoint
 
     def generate_random_vector(self, dimensions):
         """Generate a random vector with the specified dimensions."""
@@ -445,6 +454,9 @@ class VectorSearchHttpUser(FastHttpUser):
             # Standard feature vector case
             self.request["queries"][0]["datapoint"]["featureVector"] = self.base.generate_random_vector(self.base.dimensions)
         
+            # Set return_full_datapoint flag based on the parameter
+        self.request["queries"][0]["returnFullDatapoint"] = self.environment.parsed_options.return_full_datapoint
+        
         # Send the request using FastHttpUser
         with self.client.request(
             "POST",
@@ -539,7 +551,7 @@ class VectorSearchGrpcUser(User):
         # Create a query
         query = FindNeighborsRequest.Query(
             datapoint=datapoint,
-            neighbor_count=self.base.num_neighbors
+            neighbor_count=self.base.num_neighbors,
         )
         
         # Add optional parameters if specified
@@ -552,7 +564,8 @@ class VectorSearchGrpcUser(User):
         request = FindNeighborsRequest(
             index_endpoint=index_endpoint,
             deployed_index_id=self.base.deployed_index_id,
-            queries=[query]
+            queries=[query],
+            return_full_datapoint=self.environment.parsed_options.return_full_datapoint,
         )
         
         # The interceptor will handle performance metrics automatically
